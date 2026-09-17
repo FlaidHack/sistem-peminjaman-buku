@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perpustakaan Digital</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- LOGIN PAGE -->
+    <div id="login-page" class="page active">
+        <div class="login-card">
+            <h1>Perpustakaan Digital</h1>
+            <p class="subtitle">Masuk untuk meminjam buku</p>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="nim">NIM</label>
+                    <input type="text" id="nim" placeholder="Masukkan NIM" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="Masukkan password">
+                </div>
+                <div id="login-error" class="error-msg"></div>
+                <button type="submit" class="btn btn-primary btn-full">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- APP PAGE -->
+    <div id="app-page" class="page">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <h2>Perpustakaan Digital</h2>
+            </div>
+            <div class="header-right">
+                <span id="student-name"></span>
+                <button id="logout-btn" class="btn btn-outline">Logout</button>
+            </div>
+        </header>
+
+        <!-- Tabs -->
+        <nav class="tabs">
+            <button class="tab active" data-tab="catalog">Katalog Buku</button>
+            <button class="tab" data-tab="loans">Peminjaman Aktif</button>
+        </nav>
+
+        <!-- Catalog Section -->
+        <section id="catalog-section" class="tab-content active">
+            <h3>Daftar Buku</h3>
+            <div id="catalog-list" class="book-grid"></div>
+        </section>
+
+        <!-- Loans Section -->
+        <section id="loans-section" class="tab-content">
+            <h3>Peminjaman Aktif</h3>
+            <div id="loans-list"></div>
+        </section>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="notification hidden"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
