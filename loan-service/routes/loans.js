@@ -13,6 +13,15 @@ function getTodayStr() {
   return new Date().toISOString().split('T')[0];
 }
 
+// Bedakan S1 mati/tak terjangkau vs S1 lambat (timeout): pesan 503 berbeda,
+// status tetap 503 agar kontrak error konsisten untuk frontend.
+function catalogError(err) {
+  if (catalogClient.isTimeout && catalogClient.isTimeout(err)) {
+    return { status: 503, message: 'Katalog service timeout, coba lagi' };
+  }
+  return { status: 503, message: 'Katalog service tidak tersedia' };
+}
+
 function addDays(dateStr, days) {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + days);
@@ -31,7 +40,8 @@ router.post('/loans', async (req, res) => {
   try {
     user = await catalogClient.getUser(studentId);
   } catch (err) {
-    return res.status(503).json({ success: false, message: 'Katalog service tidak tersedia' });
+    const e = catalogError(err);
+    return res.status(e.status).json({ success: false, message: e.message });
   }
   if (!user) {
     return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
@@ -41,7 +51,8 @@ router.post('/loans', async (req, res) => {
   try {
     book = await catalogClient.getBook(bookId);
   } catch (err) {
-    return res.status(503).json({ success: false, message: 'Katalog service tidak tersedia' });
+    const e = catalogError(err);
+    return res.status(e.status).json({ success: false, message: e.message });
   }
   if (!book) {
     return res.status(404).json({ success: false, message: 'Buku tidak ditemukan' });
@@ -73,7 +84,8 @@ router.post('/loans', async (req, res) => {
   } catch (err) {
     const rolledBack = readJson(loansFile).filter(l => l.id !== loan.id);
     writeJson(loansFile, rolledBack);
-    return res.status(503).json({ success: false, message: 'Katalog service tidak tersedia' });
+    const e = catalogError(err);
+    return res.status(e.status).json({ success: false, message: e.message });
   }
 
   return res.status(201).json({ success: true, loan });
@@ -94,7 +106,8 @@ router.get('/loans', async (req, res) => {
     try {
       book = await catalogClient.getBook(loan.bookId);
     } catch (err) {
-      return res.status(503).json({ success: false, message: 'Katalog service tidak tersedia' });
+      const e = catalogError(err);
+      return res.status(e.status).json({ success: false, message: e.message });
     }
     result.push({ ...loan, title: book ? book.book.title : null });
   }
@@ -120,7 +133,8 @@ router.post('/loans/:id/return', async (req, res) => {
     const rolledBack = readJson(loansFile);
     rolledBack.push(loan);
     writeJson(loansFile, rolledBack);
-    return res.status(503).json({ success: false, message: 'Katalog service tidak tersedia' });
+    const e = catalogError(err);
+    return res.status(e.status).json({ success: false, message: e.message });
   }
 
   return res.json({ success: true, message: 'Buku berhasil dikembalikan' });
