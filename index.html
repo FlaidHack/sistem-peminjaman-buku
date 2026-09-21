@@ -10,21 +10,45 @@
 
     <!-- LOGIN PAGE -->
     <div id="login-page" class="page active">
-        <div class="login-card">
-            <h1>Perpustakaan Digital</h1>
-            <p class="subtitle">Masuk untuk meminjam buku</p>
-            <form id="login-form">
-                <div class="form-group">
-                    <label for="nim">NIM</label>
-                    <input type="text" id="nim" placeholder="Masukkan NIM" autocomplete="off">
+        <div class="split-card">
+            <div class="brand-panel">
+                <div class="brand-decor brand-decor-1"></div>
+                <div class="brand-decor brand-decor-2"></div>
+                <div class="brand-decor brand-decor-3"></div>
+                <div class="brand-content">
+                    <div class="brand-logo">
+                        <span class="brand-logo-icon">&#128218;</span>
+                        <span class="brand-logo-text">Perpustakaan<br>Digital</span>
+                    </div>
+                    <p class="brand-tagline">Jelajahi ribuan koleksi ilmu, pinjam dengan mudah, kembalikan tepat waktu.</p>
+                    <ul class="brand-features">
+                        <li><span class="feature-check">&#10003;</span> Katalog buku lengkap &amp; selalu terbaru</li>
+                        <li><span class="feature-check">&#10003;</span> Peminjaman cepat, batas hingga 3 buku</li>
+                        <li><span class="feature-check">&#10003;</span> Pengingat batas pengembalian 7 hari</li>
+                    </ul>
+                    <div class="brand-stats">
+                        <div class="brand-stat"><strong>12+</strong><span>Koleksi Buku</span></div>
+                        <div class="brand-stat"><strong>3</strong><span>Mahasiswa Aktif</span></div>
+                        <div class="brand-stat"><strong>7</strong><span>Hari Pinjam</span></div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" placeholder="Masukkan password">
-                </div>
-                <div id="login-error" class="error-msg"></div>
-                <button type="submit" class="btn btn-primary btn-full">Login</button>
-            </form>
+            </div>
+            <div class="form-panel">
+                <h1>Selamat Datang</h1>
+                <p class="subtitle">Masuk untuk meminjam buku</p>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="nim">NIM</label>
+                        <input type="text" id="nim" placeholder="Masukkan NIM" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" placeholder="Masukkan password">
+                    </div>
+                    <div id="login-error" class="error-msg"></div>
+                    <button type="submit" class="btn btn-primary btn-full">Masuk</button>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -33,31 +57,83 @@
         <!-- Header -->
         <header class="app-header">
             <div class="header-left">
-                <h2>Perpustakaan Digital</h2>
+                <span class="logo-pill">&#128218;</span>
+                <h2>Perpustakaan <span class="title-accent">Digital</span></h2>
             </div>
             <div class="header-right">
-                <span id="student-name"></span>
+                <div class="user-chip">
+                    <span id="avatar" class="avatar">?</span>
+                    <span id="student-name"></span>
+                </div>
                 <button id="logout-btn" class="btn btn-outline">Logout</button>
             </div>
         </header>
 
-        <!-- Tabs -->
-        <nav class="tabs">
-            <button class="tab active" data-tab="catalog">Katalog Buku</button>
-            <button class="tab" data-tab="loans">Peminjaman Aktif</button>
-        </nav>
+        <main class="app-main">
+            <!-- Stats -->
+            <section class="stats-bar">
+                <div class="stat-card stat-total">
+                    <span class="stat-icon">&#128218;</span>
+                    <div class="stat-info">
+                        <strong id="stat-total">0</strong>
+                        <span>Total Buku</span>
+                    </div>
+                </div>
+                <div class="stat-card stat-available">
+                    <span class="stat-icon">&#9989;</span>
+                    <div class="stat-info">
+                        <strong id="stat-available">0</strong>
+                        <span>Tersedia</span>
+                    </div>
+                </div>
+                <div class="stat-card stat-borrowed">
+                    <span class="stat-icon">&#128274;</span>
+                    <div class="stat-info">
+                        <strong id="stat-borrowed">0</strong>
+                        <span>Dipinjam</span>
+                    </div>
+                </div>
+                <div class="stat-card stat-active">
+                    <span class="stat-icon">&#128203;</span>
+                    <div class="stat-info">
+                        <strong id="stat-active">0</strong>
+                        <span>Peminjaman Saya</span>
+                    </div>
+                </div>
+            </section>
 
-        <!-- Catalog Section -->
-        <section id="catalog-section" class="tab-content active">
-            <h3>Daftar Buku</h3>
-            <div id="catalog-list" class="book-grid"></div>
-        </section>
+            <!-- Tabs -->
+            <nav class="tabs">
+                <button class="tab active" data-tab="catalog">Katalog Buku</button>
+                <button class="tab" data-tab="loans">Peminjaman Aktif</button>
+            </nav>
 
-        <!-- Loans Section -->
-        <section id="loans-section" class="tab-content">
-            <h3>Peminjaman Aktif</h3>
-            <div id="loans-list"></div>
-        </section>
+            <!-- Catalog Section -->
+            <section id="catalog-section" class="tab-content active">
+                <div class="section-head">
+                    <h3>Daftar Buku</h3>
+                    <div class="search-box">
+                        <span class="search-icon">&#128269;</span>
+                        <input type="text" id="search-input" placeholder="Cari judul, penulis, atau kategori..." autocomplete="off">
+                    </div>
+                </div>
+                <div id="catalog-list" class="book-grid"></div>
+            </section>
+
+            <!-- Loans Section -->
+            <section id="loans-section" class="tab-content">
+                <div class="section-head">
+                    <h3>Peminjaman Aktif</h3>
+                    <p class="loan-note">Maksimal <strong>3 buku</strong> &middot; Batas kembali <strong>7 hari</strong></p>
+                </div>
+                <div id="loans-list"></div>
+            </section>
+        </main>
+
+        <footer class="app-footer">
+            <p><strong>Perpustakaan Digital</strong> &middot; Sistem Peminjaman Buku Berbasis Microservice</p>
+            <p class="footer-sub">Catalog Service &middot; Loan Service &middot; Dibuat dengan &#10084; oleh Kelompok 1</p>
+        </footer>
     </div>
 
     <!-- Notification Toast -->

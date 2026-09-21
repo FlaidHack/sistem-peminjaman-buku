@@ -3,36 +3,84 @@
     "id": "B001",
     "title": "Pemrograman Web",
     "author": "Andi Setiawan",
+    "category": "Pemrograman",
     "status": "available"
   },
   {
     "id": "B002",
     "title": "Basis Data",
     "author": "Rina Wati",
+    "category": "Basis Data",
     "status": "available"
   },
   {
     "id": "B003",
     "title": "Jaringan Komputer",
     "author": "Dedi Kurniawan",
+    "category": "Jaringan",
     "status": "available"
   },
   {
     "id": "B004",
     "title": "Struktur Data dan Algoritma",
     "author": "Siti Nurhaliza",
+    "category": "Pemrograman",
     "status": "available"
   },
   {
     "id": "B005",
     "title": "Sistem Operasi",
     "author": "Bambang Susilo",
+    "category": "Sistem",
     "status": "available"
   },
   {
     "id": "B006",
     "title": "Rekayasa Perangkat Lunak",
     "author": "Maya Putri",
+    "category": "Rekayasa",
+    "status": "available"
+  },
+  {
+    "id": "B007",
+    "title": "Kecerdasan Buatan",
+    "author": "Fajar Rahman",
+    "category": "AI",
+    "status": "available"
+  },
+  {
+    "id": "B008",
+    "title": "Keamanan Siber",
+    "author": "Dewi Lestari",
+    "category": "Keamanan",
+    "status": "available"
+  },
+  {
+    "id": "B009",
+    "title": "Machine Learning dengan Python",
+    "author": "Agus Prasetyo",
+    "category": "AI",
+    "status": "available"
+  },
+  {
+    "id": "B010",
+    "title": "Pemrograman Mobile Android",
+    "author": "Rizky Ananda",
+    "category": "Pemrograman",
+    "status": "available"
+  },
+  {
+    "id": "B011",
+    "title": "Cloud Computing",
+    "author": "Sari Wulandari",
+    "category": "Cloud",
+    "status": "available"
+  },
+  {
+    "id": "B012",
+    "title": "UI/UX Design",
+    "author": "Gilang Ramadhan",
+    "category": "Desain",
     "status": "available"
   }
 ]

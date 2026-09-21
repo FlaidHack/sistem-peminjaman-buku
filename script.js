@@ -91,50 +91,142 @@ function logout() {
 }
 
 // ========== CATALOG ==========
+var cachedBooks = [];
+
+var COVER_GRADIENTS = [
+    "linear-gradient(135deg, #16a34a, #14532d)",
+    "linear-gradient(135deg, #65a30d, #1a4d2e)",
+    "linear-gradient(135deg, #eab308, #92400e)",
+    "linear-gradient(135deg, #0d9488, #14532d)",
+    "linear-gradient(135deg, #15803d, #052e16)",
+    "linear-gradient(135deg, #4d7c0f, #365314)"
+];
+
+function coverGradient(bookId) {
+    var h = 0;
+    var s = String(bookId || "");
+    for (var i = 0; i < s.length; i++) h += s.charCodeAt(i);
+    return COVER_GRADIENTS[h % COVER_GRADIENTS.length];
+}
+
+function setStat(id, value) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = value;
+}
+
+function buildBookCard(book, index) {
+    var isAvailable = book.status === "available";
+
+    var card = document.createElement("div");
+    card.className = "book-card";
+    card.style.animationDelay = ((index % 12) * 40) + "ms";
+
+    var cover = document.createElement("div");
+    cover.className = "book-cover";
+    cover.style.background = coverGradient(book.id);
+
+    var initial = document.createElement("span");
+    initial.className = "cover-initial";
+    initial.textContent = (book.title || "?").charAt(0).toUpperCase();
+
+    var ribbon = document.createElement("div");
+    ribbon.className = "cover-ribbon";
+    cover.appendChild(initial);
+    cover.appendChild(ribbon);
+
+    var body = document.createElement("div");
+    body.className = "book-body";
+
+    var cat = document.createElement("span");
+    cat.className = "book-category";
+    cat.textContent = book.category || "Umum";
+
+    var titleEl = document.createElement("div");
+    titleEl.className = "book-title";
+    titleEl.textContent = book.title;
+
+    var authorEl = document.createElement("div");
+    authorEl.className = "book-author";
+    authorEl.textContent = "oleh " + book.author;
+
+    var foot = document.createElement("div");
+    foot.className = "book-foot";
+
+    var badge = document.createElement("span");
+    if (isAvailable) {
+        badge.className = "badge badge-available";
+        badge.textContent = "Tersedia";
+    } else {
+        badge.className = "badge badge-borrowed";
+        badge.textContent = "Dipinjam";
+    }
+    foot.appendChild(badge);
+
+    var btn = document.createElement("button");
+    btn.className = "btn btn-borrow";
+    btn.textContent = "Pinjam";
+    btn.disabled = !isAvailable;
+    btn.setAttribute("data-book-id", book.id);
+    btn.addEventListener("click", handleBorrow);
+
+    body.appendChild(cat);
+    body.appendChild(titleEl);
+    body.appendChild(authorEl);
+    body.appendChild(foot);
+    body.appendChild(btn);
+
+    card.appendChild(cover);
+    card.appendChild(body);
+    return card;
+}
+
+function renderCards(list) {
+    var container = document.getElementById("catalog-list");
+    container.innerHTML = "";
+    if (list.length === 0) {
+        container.innerHTML = '<p class="empty-msg">Tidak ada buku yang cocok dengan pencarian.</p>';
+        return;
+    }
+    for (var i = 0; i < list.length; i++) {
+        container.appendChild(buildBookCard(list[i], i));
+    }
+}
+
+function applySearch(query) {
+    var q = String(query || "").toLowerCase().trim();
+    if (!q) {
+        renderCards(cachedBooks);
+        return;
+    }
+    var filtered = [];
+    for (var i = 0; i < cachedBooks.length; i++) {
+        var b = cachedBooks[i];
+        var hay = ((b.title || "") + " " + (b.author || "") + " " + (b.category || "")).toLowerCase();
+        if (hay.indexOf(q) !== -1) filtered.push(b);
+    }
+    renderCards(filtered);
+}
+
+function renderStatsFromBooks(books) {
+    var available = 0;
+    for (var i = 0; i < books.length; i++) {
+        if (books[i].status === "available") available++;
+    }
+    setStat("stat-total", books.length);
+    setStat("stat-available", available);
+    setStat("stat-borrowed", books.length - available);
+}
+
 function renderCatalog() {
     var container = document.getElementById("catalog-list");
     container.innerHTML = "";
 
     return apiRequest(APP_CONFIG.catalogBaseUrl + "/api/books", "Katalog")
         .then(function (data) {
-            var books = data.books || [];
-            for (var i = 0; i < books.length; i++) {
-                var book = books[i];
-                var isAvailable = book.status === "available";
-
-                var card = document.createElement("div");
-                card.className = "book-card";
-
-                var titleEl = document.createElement("div");
-                titleEl.className = "book-title";
-                titleEl.textContent = book.title;
-
-                var authorEl = document.createElement("div");
-                authorEl.className = "book-author";
-                authorEl.textContent = "oleh " + book.author;
-
-                var badge = document.createElement("span");
-                if (isAvailable) {
-                    badge.className = "badge badge-available";
-                    badge.textContent = "Tersedia";
-                } else {
-                    badge.className = "badge badge-borrowed";
-                    badge.textContent = "Dipinjam";
-                }
-
-                var btn = document.createElement("button");
-                btn.className = "btn btn-borrow";
-                btn.textContent = "Pinjam";
-                btn.disabled = !isAvailable;
-                btn.setAttribute("data-book-id", book.id);
-                btn.addEventListener("click", handleBorrow);
-
-                card.appendChild(titleEl);
-                card.appendChild(authorEl);
-                card.appendChild(badge);
-                card.appendChild(btn);
-                container.appendChild(card);
-            }
+            cachedBooks = data.books || [];
+            renderStatsFromBooks(cachedBooks);
+            var searchInput = document.getElementById("search-input");
+            applySearch(searchInput ? searchInput.value : "");
         })
         .catch(function (err) {
             showNotification(err.message, "error");
@@ -152,6 +244,7 @@ function renderLoans() {
     return apiRequest(APP_CONFIG.loanBaseUrl + "/api/loans?studentId=" + encodeURIComponent(user.studentId), "Loan")
         .then(function (data) {
             var loans = data.loans || [];
+            setStat("stat-active", loans.length);
 
             if (loans.length === 0) {
                 container.innerHTML = '<p class="empty-msg">Tidak ada peminjaman aktif.</p>';
@@ -323,6 +416,13 @@ function initApp() {
         showPage("login-page");
     });
 
+    var searchInput = document.getElementById("search-input");
+    if (searchInput) {
+        searchInput.addEventListener("input", function () {
+            applySearch(searchInput.value);
+        });
+    }
+
     var tabs = document.querySelectorAll(".tab");
     for (var i = 0; i < tabs.length; i++) {
         tabs[i].addEventListener("click", function () {
@@ -333,6 +433,10 @@ function initApp() {
 
 function showApp(session) {
     document.getElementById("student-name").textContent = session.name;
+    var avatarEl = document.getElementById("avatar");
+    if (avatarEl) {
+        avatarEl.textContent = (session.name || "?").charAt(0).toUpperCase();
+    }
     renderCatalog();
     renderLoans();
     showPage("app-page");
