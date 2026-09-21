@@ -1,0 +1,8 @@
+[
+  { "id": "B001", "title": "Pemrograman Web", "author": "Andi Setiawan", "status": "available" },
+  { "id": "B002", "title": "Basis Data", "author": "Rina Wati", "status": "available" },
+  { "id": "B003", "title": "Jaringan Komputer", "author": "Dedi Kurniawan", "status": "available" },
+  { "id": "B004", "title": "Struktur Data dan Algoritma", "author": "Siti Nurhaliza", "status": "available" },
+  { "id": "B005", "title": "Sistem Operasi", "author": "Bambang Susilo", "status": "available" },
+  { "id": "B006", "title": "Rekayasa Perangkat Lunak", "author": "Maya Putri", "status": "available" }
+]
