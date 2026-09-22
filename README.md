@@ -1,11 +1,43 @@
-Sistem peminjaman buku ayo masuk nama ku
-Sistem peminjaman buku kelompok 1
+# Sistem Peminjaman Buku
 
-kristanto cahyo nugroho
-muhammad fadil
-reyhan samudra
-alfatir faza
-khairunisa
+Sistem peminjaman buku kelompok 1.
+
+Anggota kelompok:
+- kristanto cahyo nugroho
+- muhammad fadil
+- reyhan samudra
+- alfathir faza
+- khairunisa
+
+## Deskripsi
+
+Aplikasi berbasis web untuk mengelola katalog dan peminjaman buku di perpustakaan.
+Pengguna dapat login, melihat daftar buku, meminjam buku, dan mengembalikan buku dengan
+aturan bisnis (maksimal 3 pinjaman aktif, jatuh tempo +7 hari, buku yang sedang dipinjam tidak tersedia).
+
+## Teknologi yang Digunakan
+
+- **Backend:** Node.js + Express.js
+- **Frontend:** HTML, CSS, JavaScript (statis)
+- **Penyimpanan:** File JSON per service
+- **Komunikasi antar-service:** HTTP REST API (`fetch`)
+
+## Microservice
+
+Dua service backend yang berjalan terpisah dan berkomunikasi via HTTP:
+
+- **catalog-service (:3001)** — autentikasi/login, katalog buku, dan data pengguna.
+- **loan-service (:3002)** — sirkulasi peminjaman: pinjam, daftar pinjaman aktif, dan pengembalian. Tidak membaca data service lain secara langsung; semua validasi lewat catalog-service.
+
+## Alur Sistem
+
+1. User login ke **catalog-service** → mendapat data pengguna.
+2. User melihat daftar buku dari **catalog-service**.
+3. User mengajukan peminjaman ke **loan-service**.
+4. **loan-service** memvalidasi ke **catalog-service** (user ada? buku tersedia? kuota < 3?).
+5. Jika valid, **loan-service** mencatat pinjaman dan mengubah status buku menjadi `borrowed` di **catalog-service** (lewat HTTP, dengan key internal).
+6. Pada pengembalian, **loan-service** menghapus pinjaman dan mengubah status buku kembali menjadi `available`.
+7. Jika komunikasi antar-service gagal, sistem melakukan rollback dan mengembalikan pesan error.
 
 ## Cara menjalankan
 
