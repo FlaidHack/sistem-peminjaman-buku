@@ -3,7 +3,7 @@
 Dua service, komunikasi antar-service lewat HTTP API. Data terisolasi per service (file JSON masing-masing).
 
 ```
-[Browser: index.html + script.js]
+[Browser: frontend/index.html + frontend/script.js]
    | :3001 (login, katalog)      | :3002 (pinjam, aktif, kembali)
    v                             v
 [catalog-service :3001] <---- GET/PATCH /api/books/*, GET /api/users/:id
