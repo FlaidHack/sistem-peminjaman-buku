@@ -14,7 +14,7 @@ Berikut alur penggunaan AI selama pengembangan, mulai dari perencanaan (plan), p
 | **Integrasi antar service** — menghubungkan catalog-service dengan loan-service | ![prompt-integrasi-service](img/prompt-integrasi-service.png) | — |
 | **Adaptasi frontend** — mengubah frontend agar menggunakan API dari service | ![prompt-fe](img/prompt-fe.png) | — |
 | **Redesign UI** — perombakan tampilan antarmuka pengguna | ![redisign-ui](img/redisign-ui.png) | — |
-| **Bug web blank/double refresh** — setiap aksi web tampil kosong/double refresh; hasil analisis AI: *Bug ditemukan (bukan masalah kode, hanya masalah live server)* | — | ![bug](img/bug.png) Rekomendasi perbaikan dari AI: ![fixbug](img/fixbug.png) |
+| **Bug web blank/double refresh** — setiap aksi web tampil kosong/double refresh; hasil analisis AI: *Bug ditemukan (bukan masalah kode, hanya masalah live server)* | ![prompt-bug](img/prompt-bug.png) | ![bug](img/bug.png) Rekomendasi perbaikan dari AI: ![fixbug](img/fixbug.png) |
 | **Perbaikan bug live server** — prompt perbaikan dengan memindahkan kode UI utama (`index.html`, `style.css`, `script.js`) ke dalam folder `frontend` agar dapat dijalankan live server melalui folder `frontend`, bukan root proyek | ![prompt-fixbug](img/prompt-fixbug.png) | — |
 
 Tabel di atas dirangkum sebagai alur berikut:

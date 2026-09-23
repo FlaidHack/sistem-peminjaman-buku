@@ -29,6 +29,18 @@ Dua service backend yang berjalan terpisah dan berkomunikasi via HTTP:
 - **catalog-service (:3001)** — autentikasi/login, katalog buku, dan data pengguna.
 - **loan-service (:3002)** — sirkulasi peminjaman: pinjam, daftar pinjaman aktif, dan pengembalian. Tidak membaca data service lain secara langsung; semua validasi lewat catalog-service.
 
+> Lihat detail: [dokumentasi arsitektur](docs/architecture.md)
+
+## Penggunaan AI
+
+AI coding tool yang digunakan selama pengembangan adalah **Opencode**. AI berperan dalam
+perencanaan migrasi dari arsitektur monolitik ke microservice, pembangunan catalog-service dan
+loan-service, integrasi antar service, adaptasi serta redesign frontend agar memakai API dari
+service, debugging bug (misalnya web blank/double refresh akibat masalah live server), hingga
+bantuan penyusunan dokumentasi.
+
+> Lihat detail: [dokumentasi penggunaan AI](docs/ai.md)
+
 ## Alur Sistem
 
 1. User login ke **catalog-service** → mendapat data pengguna.
