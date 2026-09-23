@@ -18,14 +18,13 @@ Tidak ada backend, tidak ada API, dan tidak ada pemisahan layanan. Semua data di
 bisnis (maksimal 3 pinjaman aktif, jatuh tempo +7 hari, buku yang dipinjam tidak tersedia)
 juga dilakukan sepenuhnya di sisi klien.
 
-```
-        [Browser: Satu Halaman Status]
-                    📄 index.html
-                    🎨 style.css
-                    ⚙️ script.js
-                       │
-              localStorage (browser)
-        users · books · loans · session
+```mermaid
+flowchart TB
+    B["Browser — satu halaman statis"]
+    B --> HTML["index.html — struktur & UI"]
+    B --> CSS["style.css — styling"]
+    B --> JS["script.js — seluruh logika aplikasi"]
+    JS --> LS[("localStorage (browser)<br/>users · books · loans · session")]
 ```
 
 | Karakteristik | Keterangan |
@@ -44,21 +43,20 @@ dengan frontend statis yang mengonsumsi API dari service tersebut.
 
 ### Diagram Arsitektur Microservice
 
-```
-[ Browser: frontend/ ]
-  index.html · style.css · script.js
-     │                                 
-     │ :3001                            │ :3002
-     │ (login, katalog)                 │ (pinjam, aktif, kembali)
-     v                                  v
-[ catalog-service :3001 ] <---- HTTP (validasi) ----> [ loan-service :3002 ]
-  Express / Node.js                      Express / Node.js
-  data/users.json                        data/loans.json
-  data/books.json
-       ^
-       └── GET users, GET books, PATCH books (x-internal-key)
-           dipanggil loan-service lewat services/catalogClient.js
-           (fetch ke :3001, timeout 5 detik)
+```mermaid
+flowchart TB
+    subgraph FE["FRONTEND — statis"]
+        UI["frontend/<br/>index.html · style.css · script.js"]
+    end
+
+    subgraph BE["BACKEND — microservice (Node.js + Express)"]
+        CAT["catalog-service :3001<br/>data/users.json · data/books.json"]
+        LOAN["loan-service :3002<br/>data/loans.json"]
+    end
+
+    UI -- "HTTP :3001 — login · katalog" --> CAT
+    UI -- "HTTP :3002 — pinjam · aktif · kembali" --> LOAN
+    LOAN -- "validasi via catalogClient.js (timeout 5 detik)<br/>GET /api/users/:id · GET /api/books/:id<br/>PATCH /api/books/:id (header x-internal-key)" --> CAT
 ```
 
 | Bagian | Teknologi | Port | Kepemilikan data |
@@ -76,16 +74,8 @@ Perbedaan utama dengan arsitektur sebelumnya:
 
 ## 3. Detail Microservice
 
-Dua service, komunikasi antar-service lewat HTTP API. Data terisolasi per service (file JSON masing-masing).
-
-```
-[Browser: frontend/index.html + frontend/script.js]
-   | :3001 (login, katalog)      | :3002 (pinjam, aktif, kembali)
-   v                             v
-[catalog-service :3001] <---- GET/PATCH /api/books/*, GET /api/users/:id
-data/users.json, data/books.json  ---- [loan-service :3002]
-                                            data/loans.json
-```
+Dua service, komunikasi antar-service lewat HTTP API. Data terisolasi per service (file JSON
+masing-masing) — lihat diagram arsitektur di [bagian 2](#2-arsitektur-sesudah--microservice).
 
 * **catalog-service (:3001)** — owner `users.json` + `books.json`. Endpoint: `POST /api/login`,
   `GET /api/books`, `GET /api/books/:id`, `GET /api/users/:id`,
