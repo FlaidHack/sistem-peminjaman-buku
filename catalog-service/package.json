@@ -1,7 +1,7 @@
 {
   "name": "catalog-service",
   "version": "1.0.0",
-  "description": "Service 1: Auth + Katalog Buku (owner users.json & books.json)",
+  "description": "Service 1: Katalog Buku (owner catalog_db)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mysql2": "^3.9.7"
   }
 }

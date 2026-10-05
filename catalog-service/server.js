@@ -1,6 +1,7 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const usersRouter = require('./routes/users');
+const requireApiKey = require('./middleware/apiKey');
 const booksRouter = require('./routes/books');
 
 const app = express();
@@ -13,8 +14,8 @@ app.get('/health', (req, res) => {
   res.json({ service: 'catalog-service', status: 'ok', port: PORT });
 });
 
-app.use('/api', usersRouter);
-app.use('/api', booksRouter);
+// Semua route di bawah wajib x-api-key (direct tanpa key -> 401)
+app.use('/api', requireApiKey, booksRouter);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Endpoint tidak ditemukan' });

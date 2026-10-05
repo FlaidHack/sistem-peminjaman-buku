@@ -1,9 +1,15 @@
 // Tahap 2: implementasi sirkulasi (US-03/US-04/US-05 / AC-03 s/d AC-07).
+// Fase 2: dataloan pindah ke loan_db (MySQL); user divalidasi via auth-service.
 const express = require('express');
+const { query } = require('../db');
 const catalogClient = require('../services/catalogClient');
-const { readJson, writeJson, loansFile, MAX_LOANS, BORROW_DAYS } = require('./store');
+const authClient = require('../services/authClient');
 
 const router = express.Router();
+const MAX_LOANS = 3;
+const BORROW_DAYS = 7;
+
+const DB_ERROR = { success: false, message: 'Database tidak tersedia' };
 
 function generateLoanId() {
   return `LN_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -13,13 +19,24 @@ function getTodayStr() {
   return new Date().toISOString().split('T')[0];
 }
 
-// Bedakan S1 mati/tak terjangkau vs S1 lambat (timeout): pesan 503 berbeda,
+// Bentuk respons loan tetap camelCase seperti kontrak lama (frontend + test).
+function toLoan(row) {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    bookId: row.book_id,
+    borrowDate: row.borrow_date,
+    dueDate: row.due_date
+  };
+}
+
+// Bedakan service mati/tak terjangkau vs lambat (timeout): pesan 503 berbeda,
 // status tetap 503 agar kontrak error konsisten untuk frontend.
-function catalogError(err) {
-  if (catalogClient.isTimeout && catalogClient.isTimeout(err)) {
-    return { status: 503, message: 'Katalog service timeout, coba lagi' };
+function dependencyError(err, client, label) {
+  if (client.isTimeout(err)) {
+    return { status: 503, message: `${label} service timeout, coba lagi` };
   }
-  return { status: 503, message: 'Katalog service tidak tersedia' };
+  return { status: 503, message: `${label} service tidak tersedia` };
 }
 
 function addDays(dateStr, days) {
@@ -28,7 +45,9 @@ function addDays(dateStr, days) {
   return d.toISOString().split('T')[0];
 }
 
-// POST /loans { studentId, bookId } -> validasi via catalogClient, maks 3 aktif, dueDate +7 hari
+const INSERT_SQL = 'INSERT INTO loans (id, student_id, book_id, borrow_date, due_date) VALUES (?, ?, ?, ?, ?)';
+
+// POST /loans { studentId, bookId } -> validasi via auth+catalog, maks 3 aktif, dueDate +7 hari
 router.post('/loans', async (req, res) => {
   const { studentId, bookId } = req.body || {};
 
@@ -38,9 +57,9 @@ router.post('/loans', async (req, res) => {
 
   let user;
   try {
-    user = await catalogClient.getUser(studentId);
+    user = await authClient.getUser(studentId);
   } catch (err) {
-    const e = catalogError(err);
+    const e = dependencyError(err, authClient, 'Auth');
     return res.status(e.status).json({ success: false, message: e.message });
   }
   if (!user) {
@@ -51,7 +70,7 @@ router.post('/loans', async (req, res) => {
   try {
     book = await catalogClient.getBook(bookId);
   } catch (err) {
-    const e = catalogError(err);
+    const e = dependencyError(err, catalogClient, 'Katalog');
     return res.status(e.status).json({ success: false, message: e.message });
   }
   if (!book) {
@@ -61,55 +80,69 @@ router.post('/loans', async (req, res) => {
     return res.status(409).json({ success: false, message: 'Buku sedang dipinjam oleh pengguna lain' });
   }
 
-  const loans = readJson(loansFile);
-  const activeCount = loans.filter(l => l.studentId === studentId).length;
-  if (activeCount >= MAX_LOANS) {
+  let countRows;
+  try {
+    countRows = await query('SELECT COUNT(*) AS total FROM loans WHERE student_id = ?', [studentId]);
+  } catch (err) {
+    return res.status(500).json(DB_ERROR);
+  }
+  if (Number(countRows[0].total) >= MAX_LOANS) {
     return res.status(400).json({ success: false, message: `Batas maksimal peminjaman (${MAX_LOANS} buku) telah tercapai` });
   }
 
   const today = getTodayStr();
   const loan = {
     id: generateLoanId(),
-    studentId,
-    bookId,
-    borrowDate: today,
-    dueDate: addDays(today, BORROW_DAYS)
+    student_id: studentId,
+    book_id: bookId,
+    borrow_date: today,
+    due_date: addDays(today, BORROW_DAYS)
   };
 
-  loans.push(loan);
-  writeJson(loansFile, loans);
+  try {
+    await query(INSERT_SQL, [loan.id, loan.student_id, loan.book_id, loan.borrow_date, loan.due_date]);
+  } catch (err) {
+    return res.status(500).json(DB_ERROR);
+  }
 
   try {
     await catalogClient.setBookStatus(bookId, 'borrowed');
   } catch (err) {
-    const rolledBack = readJson(loansFile).filter(l => l.id !== loan.id);
-    writeJson(loansFile, rolledBack);
-    const e = catalogError(err);
+    try {
+      await query('DELETE FROM loans WHERE id = ?', [loan.id]);
+    } catch (rollbackErr) {
+      return res.status(500).json(DB_ERROR);
+    }
+    const e = dependencyError(err, catalogClient, 'Katalog');
     return res.status(e.status).json({ success: false, message: e.message });
   }
 
-  return res.status(201).json({ success: true, loan });
+  return res.status(201).json({ success: true, loan: toLoan(loan) });
 });
 
 // GET /loans?studentId=... -> daftar aktif + enrich judul (AC-06)
 router.get('/loans', async (req, res) => {
   const { studentId } = req.query;
-  let loans = readJson(loansFile);
 
-  if (studentId) {
-    loans = loans.filter(l => l.studentId === studentId);
+  let rows;
+  try {
+    rows = studentId
+      ? await query('SELECT * FROM loans WHERE student_id = ? ORDER BY borrow_date, id', [studentId])
+      : await query('SELECT * FROM loans ORDER BY borrow_date, id');
+  } catch (err) {
+    return res.status(500).json(DB_ERROR);
   }
 
   const result = [];
-  for (const loan of loans) {
+  for (const row of rows) {
     let book;
     try {
-      book = await catalogClient.getBook(loan.bookId);
+      book = await catalogClient.getBook(row.book_id);
     } catch (err) {
-      const e = catalogError(err);
+      const e = dependencyError(err, catalogClient, 'Katalog');
       return res.status(e.status).json({ success: false, message: e.message });
     }
-    result.push({ ...loan, title: book ? book.book.title : null });
+    result.push(Object.assign(toLoan(row), { title: book ? book.book.title : null }));
   }
 
   return res.json({ success: true, loans: result });
@@ -117,23 +150,34 @@ router.get('/loans', async (req, res) => {
 
 // POST /loans/:id/return -> hapus loan + kembalikan status buku (AC-07)
 router.post('/loans/:id/return', async (req, res) => {
-  const loans = readJson(loansFile);
-  const index = loans.findIndex(l => l.id === req.params.id);
+  let rows;
+  try {
+    rows = await query('SELECT * FROM loans WHERE id = ?', [req.params.id]);
+  } catch (err) {
+    return res.status(500).json(DB_ERROR);
+  }
 
-  if (index === -1) {
+  if (!rows[0]) {
     return res.status(404).json({ success: false, message: 'Data peminjaman tidak ditemukan' });
   }
 
-  const [loan] = loans.splice(index, 1);
-  writeJson(loansFile, loans);
+  const loan = rows[0];
 
   try {
-    await catalogClient.setBookStatus(loan.bookId, 'available');
+    await query('DELETE FROM loans WHERE id = ?', [loan.id]);
   } catch (err) {
-    const rolledBack = readJson(loansFile);
-    rolledBack.push(loan);
-    writeJson(loansFile, rolledBack);
-    const e = catalogError(err);
+    return res.status(500).json(DB_ERROR);
+  }
+
+  try {
+    await catalogClient.setBookStatus(loan.book_id, 'available');
+  } catch (err) {
+    try {
+      await query(INSERT_SQL, [loan.id, loan.student_id, loan.book_id, loan.borrow_date, loan.due_date]);
+    } catch (rollbackErr) {
+      return res.status(500).json(DB_ERROR);
+    }
+    const e = dependencyError(err, catalogClient, 'Katalog');
     return res.status(e.status).json({ success: false, message: e.message });
   }
 

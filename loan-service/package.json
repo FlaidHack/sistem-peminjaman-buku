@@ -1,7 +1,7 @@
 {
   "name": "loan-service",
   "version": "1.0.0",
-  "description": "Service 2: Sirkulasi Peminjaman (owner loans.json, validasi via catalog-service)",
+  "description": "Service 2: Sirkulasi Peminjaman (owner loan_db, validasi via catalog-service & auth-service)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mysql2": "^3.9.7"
   }
 }

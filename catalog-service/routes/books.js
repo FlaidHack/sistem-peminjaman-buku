@@ -1,51 +1,72 @@
-// Tahap 1: implementasi katalog (US-02 / AC-02) + endpoint internal untuk loan-service.
+// Fase 2: katalog buku di catalog_db (AC-02). Akses hanya via x-api-key (middleware global).
+// Login & data user pindah ke auth-service, jadi service ini murni katalog.
 const express = require('express');
-const { readJson, writeJson, booksFile } = require('./store');
+const { pool, query } = require('../db');
 
 const router = express.Router();
-const INTERNAL_KEY = process.env.INTERNAL_KEY || 'dev-internal-key';
+const BOOK_FIELDS = 'id, title, author, category, status';
+const VALID_STATUS = ['available', 'borrowed'];
+
+const DB_ERROR = { success: false, message: 'Database tidak tersedia' };
 
 // GET /books -> seluruh koleksi + status (AC-02)
-router.get('/books', (req, res) => {
-  const books = readJson(booksFile);
-  res.json({ success: true, books });
+router.get('/books', async (req, res) => {
+  let books;
+  try {
+    books = await query(`SELECT ${BOOK_FIELDS} FROM books ORDER BY id`);
+  } catch (err) {
+    return res.status(500).json(DB_ERROR);
+  }
+
+  return res.json({ success: true, books });
 });
 
 // GET /books/:id -> detail satu buku (dipakai loan-service)
-router.get('/books/:id', (req, res) => {
-  const books = readJson(booksFile);
-  const book = books.find(b => b.id === req.params.id);
+router.get('/books/:id', async (req, res) => {
+  let rows;
+  try {
+    rows = await query(`SELECT ${BOOK_FIELDS} FROM books WHERE id = ?`, [req.params.id]);
+  } catch (err) {
+    return res.status(500).json(DB_ERROR);
+  }
 
-  if (!book) {
+  if (!rows[0]) {
     return res.status(404).json({ success: false, message: 'Buku tidak ditemukan' });
   }
 
-  res.json({ success: true, book });
+  return res.json({ success: true, book: rows[0] });
 });
 
-// PATCH /books/:id { status } -> update available/borrowed, kunci via x-internal-key (dipakai loan-service)
-router.patch('/books/:id', (req, res) => {
-  const xKey = req.headers['x-internal-key'];
-  if (xKey !== INTERNAL_KEY) {
-    return res.status(403).json({ success: false, message: 'Forbidden' });
-  }
-
-  const { status } = req.body;
+// PATCH /books/:id { status } -> update available/borrowed, hanya untuk loan-service (kunci via x-api-key)
+router.patch('/books/:id', async (req, res) => {
+  const { status } = req.body || {};
   if (!status) {
     return res.status(400).json({ success: false, message: 'Status harus diisi' });
   }
+  if (!VALID_STATUS.includes(status)) {
+    return res.status(400).json({ success: false, message: `Status harus salah satu dari: ${VALID_STATUS.join(', ')}` });
+  }
 
-  const books = readJson(booksFile);
-  const index = books.findIndex(b => b.id === req.params.id);
+  let affected;
+  try {
+    const [result] = await pool.execute('UPDATE books SET status = ? WHERE id = ?', [status, req.params.id]);
+    affected = result.affectedRows;
+  } catch (err) {
+    return res.status(500).json(DB_ERROR);
+  }
 
-  if (index === -1) {
+  if (affected === 0) {
     return res.status(404).json({ success: false, message: 'Buku tidak ditemukan' });
   }
 
-  books[index].status = status;
-  writeJson(booksFile, books);
+  let rows;
+  try {
+    rows = await query(`SELECT ${BOOK_FIELDS} FROM books WHERE id = ?`, [req.params.id]);
+  } catch (err) {
+    return res.status(500).json(DB_ERROR);
+  }
 
-  res.json({ success: true, book: books[index] });
+  return res.json({ success: true, book: rows[0] });
 });
 
 module.exports = router;
