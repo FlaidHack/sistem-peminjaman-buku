@@ -1,6 +1,7 @@
 # AI Coding Tool yang Digunakan
 
 **Opencode** — AI coding tool yang digunakan selama proses pengembangan Sistem Peminjaman Buku.
+**claude** - Audit dan debug code.
 
 ## Penggunaan AI
 

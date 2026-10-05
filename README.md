@@ -33,7 +33,7 @@ Dua service backend yang berjalan terpisah dan berkomunikasi via HTTP:
 
 ## Penggunaan AI
 
-AI coding tool yang digunakan selama pengembangan adalah **Opencode**. AI berperan dalam
+AI coding tool yang digunakan selama pengembangan adalah **Opencode**,**claude**. AI berperan dalam
 perencanaan migrasi dari arsitektur monolitik ke microservice, pembangunan catalog-service dan
 loan-service, integrasi antar service, adaptasi serta redesign frontend agar memakai API dari
 service, debugging bug (misalnya web blank/double refresh akibat masalah live server), hingga
