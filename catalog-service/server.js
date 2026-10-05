@@ -1,13 +1,12 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const requireApiKey = require('./middleware/apiKey');
 const booksRouter = require('./routes/books');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+// CORS hanya di api-gateway (:3000); service ini dipanggil via HTTP server-to-server.
 app.use(express.json());
 
 app.get('/health', (req, res) => {
