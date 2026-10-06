@@ -1,14 +1,15 @@
 // ========== KONFIGURASI ==========
-var APP_CONFIG = {
-    catalogBaseUrl: "http://localhost:3001",
-    loanBaseUrl: "http://localhost:3002"
+// Fase 5: frontend hanya kenal api-gateway (:3000). Gateway yang meneruskan
+// ke auth/catalog/loan + menyuntik x-api-key per service.
+const APP_CONFIG = {
+    gatewayBaseUrl: "http://localhost:3000"
 };
 
-var SESSION_KEY = "session";
+const SESSION_KEY = "session";
 
 // ========== SESSION (sessionStorage) ==========
 function getCurrentUser() {
-    var raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     try {
         return JSON.parse(raw);
@@ -26,20 +27,37 @@ function clearSession() {
 }
 
 // ========== API HELPER ==========
+// Fase 5: selalu lewat gateway + kirim Bearer JWT (kecuali login yang belum
+// punya token). Header x-user-id/x-api-key tidak dikirim dari browser:
+// gateway menghapusnya lalu meng-inject nilai yang benar dari JWT.
+// Opsi A: response 401 (token hilang/expired) -> sesi dibersihkan +
+// tendang ke halaman login, kecuali request login itu sendiri.
 function apiRequest(url, serviceName, options) {
-    var opts = options || {};
+    const opts = options || {};
     opts.headers = opts.headers || {};
     opts.headers["Content-Type"] = "application/json";
-    var user = getCurrentUser();
-    if (user) {
-        opts.headers["x-user-id"] = user.studentId;
+    const user = getCurrentUser();
+    if (user && user.token) {
+        opts.headers["Authorization"] = "Bearer " + user.token;
     }
+    const skipAuthRedirect = !!opts.skipAuthRedirect;
+    delete opts.skipAuthRedirect;
     return fetch(url, opts).then(function (res) {
         return res.json().catch(function () {
             return {};
         }).then(function (data) {
             if (!res.ok) {
-                var e = new Error(data.message || "Terjadi kesalahan");
+                if (res.status === 401 && !skipAuthRedirect) {
+                    clearSession();
+                    if (typeof showPage === "function") {
+                        showPage("login-page");
+                    }
+                    const se = new Error("Sesi berakhir, silakan login kembali");
+                    se.apiError = true;
+                    se.unauthorized = true;
+                    throw se;
+                }
+                const e = new Error(data.message || "Terjadi kesalahan");
                 e.apiError = true;
                 throw e;
             }
@@ -53,16 +71,16 @@ function apiRequest(url, serviceName, options) {
 
 // ========== DATE HELPER ==========
 function formatDate(dateStr) {
-    var d = new Date(dateStr);
-    var day = String(d.getDate()).padStart(2, "0");
-    var month = String(d.getMonth() + 1).padStart(2, "0");
-    var year = d.getFullYear();
+    const d = new Date(dateStr);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
     return day + "/" + month + "/" + year;
 }
 
 // ========== NOTIFICATION ==========
 function showNotification(message, type) {
-    var el = document.getElementById("notification");
+    const el = document.getElementById("notification");
     el.textContent = message;
     el.className = "notification " + type;
     setTimeout(function () {
@@ -75,9 +93,10 @@ function login(nim, password) {
     if (!nim || !password) {
         return Promise.reject({ message: "Masukkan NIM dan password" });
     }
-    return apiRequest(APP_CONFIG.catalogBaseUrl + "/api/login", "Katalog", {
+    return apiRequest(APP_CONFIG.gatewayBaseUrl + "/api/auth/login", "Auth", {
         method: "POST",
-        body: JSON.stringify({ nim: nim, password: password })
+        body: JSON.stringify({ nim: nim, password: password }),
+        skipAuthRedirect: true
     }).then(function (data) {
         saveSession({ studentId: data.user.id, name: data.user.name, token: data.token });
         return { success: true };
@@ -87,13 +106,24 @@ function login(nim, password) {
 }
 
 function logout() {
+    // Fase 5: logout server-side best-effort (stateless, tanpa blacklist).
+    // Sesi lokal selalu dibersihkan walau request gagal (mis. token expired).
+    const user = getCurrentUser();
+    const token = user && user.token;
     clearSession();
+    if (!token) return Promise.resolve();
+    return fetch(APP_CONFIG.gatewayBaseUrl + "/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token }
+    }).then(function (res) {
+        return res.json().catch(function () { return {}; });
+    }).catch(function () {});
 }
 
 // ========== CATALOG ==========
-var cachedBooks = [];
+let cachedBooks = [];
 
-var COVER_GRADIENTS = [
+const COVER_GRADIENTS = [
     "linear-gradient(135deg, #16a34a, #14532d)",
     "linear-gradient(135deg, #65a30d, #1a4d2e)",
     "linear-gradient(135deg, #eab308, #92400e)",
@@ -103,56 +133,56 @@ var COVER_GRADIENTS = [
 ];
 
 function coverGradient(bookId) {
-    var h = 0;
-    var s = String(bookId || "");
-    for (var i = 0; i < s.length; i++) h += s.charCodeAt(i);
+    let h = 0;
+    const s = String(bookId || "");
+    for (let i = 0; i < s.length; i++) h += s.charCodeAt(i);
     return COVER_GRADIENTS[h % COVER_GRADIENTS.length];
 }
 
 function setStat(id, value) {
-    var el = document.getElementById(id);
+    const el = document.getElementById(id);
     if (el) el.textContent = value;
 }
 
 function buildBookCard(book, index) {
-    var isAvailable = book.status === "available";
+    const isAvailable = book.status === "available";
 
-    var card = document.createElement("div");
+    const card = document.createElement("div");
     card.className = "book-card";
     card.style.animationDelay = ((index % 12) * 40) + "ms";
 
-    var cover = document.createElement("div");
+    const cover = document.createElement("div");
     cover.className = "book-cover";
     cover.style.background = coverGradient(book.id);
 
-    var initial = document.createElement("span");
+    const initial = document.createElement("span");
     initial.className = "cover-initial";
     initial.textContent = (book.title || "?").charAt(0).toUpperCase();
 
-    var ribbon = document.createElement("div");
+    const ribbon = document.createElement("div");
     ribbon.className = "cover-ribbon";
     cover.appendChild(initial);
     cover.appendChild(ribbon);
 
-    var body = document.createElement("div");
+    const body = document.createElement("div");
     body.className = "book-body";
 
-    var cat = document.createElement("span");
+    const cat = document.createElement("span");
     cat.className = "book-category";
     cat.textContent = book.category || "Umum";
 
-    var titleEl = document.createElement("div");
+    const titleEl = document.createElement("div");
     titleEl.className = "book-title";
     titleEl.textContent = book.title;
 
-    var authorEl = document.createElement("div");
+    const authorEl = document.createElement("div");
     authorEl.className = "book-author";
     authorEl.textContent = "oleh " + book.author;
 
-    var foot = document.createElement("div");
+    const foot = document.createElement("div");
     foot.className = "book-foot";
 
-    var badge = document.createElement("span");
+    const badge = document.createElement("span");
     if (isAvailable) {
         badge.className = "badge badge-available";
         badge.textContent = "Tersedia";
@@ -162,7 +192,7 @@ function buildBookCard(book, index) {
     }
     foot.appendChild(badge);
 
-    var btn = document.createElement("button");
+    const btn = document.createElement("button");
     btn.className = "btn btn-borrow";
     btn.textContent = "Pinjam";
     btn.disabled = !isAvailable;
@@ -181,35 +211,35 @@ function buildBookCard(book, index) {
 }
 
 function renderCards(list) {
-    var container = document.getElementById("catalog-list");
+    const container = document.getElementById("catalog-list");
     container.innerHTML = "";
     if (list.length === 0) {
         container.innerHTML = '<p class="empty-msg">Tidak ada buku yang cocok dengan pencarian.</p>';
         return;
     }
-    for (var i = 0; i < list.length; i++) {
+    for (let i = 0; i < list.length; i++) {
         container.appendChild(buildBookCard(list[i], i));
     }
 }
 
 function applySearch(query) {
-    var q = String(query || "").toLowerCase().trim();
+    const q = String(query || "").toLowerCase().trim();
     if (!q) {
         renderCards(cachedBooks);
         return;
     }
-    var filtered = [];
-    for (var i = 0; i < cachedBooks.length; i++) {
-        var b = cachedBooks[i];
-        var hay = ((b.title || "") + " " + (b.author || "") + " " + (b.category || "")).toLowerCase();
+    const filtered = [];
+    for (let i = 0; i < cachedBooks.length; i++) {
+        const b = cachedBooks[i];
+        const hay = ((b.title || "") + " " + (b.author || "") + " " + (b.category || "")).toLowerCase();
         if (hay.indexOf(q) !== -1) filtered.push(b);
     }
     renderCards(filtered);
 }
 
 function renderStatsFromBooks(books) {
-    var available = 0;
-    for (var i = 0; i < books.length; i++) {
+    let available = 0;
+    for (let i = 0; i < books.length; i++) {
         if (books[i].status === "available") available++;
     }
     setStat("stat-total", books.length);
@@ -218,14 +248,14 @@ function renderStatsFromBooks(books) {
 }
 
 function renderCatalog() {
-    var container = document.getElementById("catalog-list");
+    const container = document.getElementById("catalog-list");
     container.innerHTML = "";
 
-    return apiRequest(APP_CONFIG.catalogBaseUrl + "/api/books", "Katalog")
+    return apiRequest(APP_CONFIG.gatewayBaseUrl + "/api/books", "Katalog")
         .then(function (data) {
             cachedBooks = data.books || [];
             renderStatsFromBooks(cachedBooks);
-            var searchInput = document.getElementById("search-input");
+            const searchInput = document.getElementById("search-input");
             applySearch(searchInput ? searchInput.value : "");
         })
         .catch(function (err) {
@@ -235,15 +265,15 @@ function renderCatalog() {
 
 // ========== LOANS ==========
 function renderLoans() {
-    var user = getCurrentUser();
+    const user = getCurrentUser();
     if (!user) return Promise.resolve();
 
-    var container = document.getElementById("loans-list");
+    const container = document.getElementById("loans-list");
     container.innerHTML = "";
 
-    return apiRequest(APP_CONFIG.loanBaseUrl + "/api/loans?studentId=" + encodeURIComponent(user.studentId), "Loan")
+    return apiRequest(APP_CONFIG.gatewayBaseUrl + "/api/loans?studentId=" + encodeURIComponent(user.studentId), "Loan")
         .then(function (data) {
-            var loans = data.loans || [];
+            const loans = data.loans || [];
             setStat("stat-active", loans.length);
 
             if (loans.length === 0) {
@@ -251,40 +281,40 @@ function renderLoans() {
                 return;
             }
 
-            var table = document.createElement("table");
+            const table = document.createElement("table");
             table.className = "loans-table";
 
-            var thead = document.createElement("thead");
-            var headerRow = document.createElement("tr");
-            var headers = ["No", "Judul Buku", "Tanggal Pinjam", "Batas Kembali", "Aksi"];
-            for (var h = 0; h < headers.length; h++) {
-                var th = document.createElement("th");
+            const thead = document.createElement("thead");
+            const headerRow = document.createElement("tr");
+            const headers = ["No", "Judul Buku", "Tanggal Pinjam", "Batas Kembali", "Aksi"];
+            for (let h = 0; h < headers.length; h++) {
+                const th = document.createElement("th");
                 th.textContent = headers[h];
                 headerRow.appendChild(th);
             }
             thead.appendChild(headerRow);
             table.appendChild(thead);
 
-            var tbody = document.createElement("tbody");
-            for (var i = 0; i < loans.length; i++) {
-                var loan = loans[i];
+            const tbody = document.createElement("tbody");
+            for (let i = 0; i < loans.length; i++) {
+                const loan = loans[i];
 
-                var row = document.createElement("tr");
+                const row = document.createElement("tr");
 
-                var tdNo = document.createElement("td");
+                const tdNo = document.createElement("td");
                 tdNo.textContent = i + 1;
 
-                var tdTitle = document.createElement("td");
+                const tdTitle = document.createElement("td");
                 tdTitle.textContent = loan.title || loan.bookId;
 
-                var tdBorrow = document.createElement("td");
+                const tdBorrow = document.createElement("td");
                 tdBorrow.textContent = formatDate(loan.borrowDate);
 
-                var tdDue = document.createElement("td");
+                const tdDue = document.createElement("td");
                 tdDue.textContent = formatDate(loan.dueDate);
 
-                var tdAction = document.createElement("td");
-                var returnBtn = document.createElement("button");
+                const tdAction = document.createElement("td");
+                const returnBtn = document.createElement("button");
                 returnBtn.className = "btn btn-return";
                 returnBtn.textContent = "Kembalikan";
                 returnBtn.setAttribute("data-loan-id", loan.id);
@@ -309,11 +339,11 @@ function renderLoans() {
 
 // ========== BORROW ==========
 function borrowBook(bookId) {
-    var user = getCurrentUser();
+    const user = getCurrentUser();
     if (!user) {
         return Promise.reject({ message: "Silakan login terlebih dahulu" });
     }
-    return apiRequest(APP_CONFIG.loanBaseUrl + "/api/loans", "Loan", {
+    return apiRequest(APP_CONFIG.gatewayBaseUrl + "/api/loans", "Loan", {
         method: "POST",
         body: JSON.stringify({ studentId: user.studentId, bookId: bookId })
     }).then(function (data) {
@@ -325,11 +355,11 @@ function borrowBook(bookId) {
 
 // ========== RETURN ==========
 function returnBook(loanId) {
-    var user = getCurrentUser();
+    const user = getCurrentUser();
     if (!user) {
         return Promise.reject({ message: "Silakan login terlebih dahulu" });
     }
-    return apiRequest(APP_CONFIG.loanBaseUrl + "/api/loans/" + loanId + "/return", "Loan", {
+    return apiRequest(APP_CONFIG.gatewayBaseUrl + "/api/loans/" + loanId + "/return", "Loan", {
         method: "POST"
     }).then(function () {
         return { success: true, message: "Buku berhasil dikembalikan" };
@@ -340,7 +370,7 @@ function returnBook(loanId) {
 
 // ========== EVENT HANDLERS ==========
 function handleBorrow(e) {
-    var bookId = e.target.getAttribute("data-book-id");
+    const bookId = e.target.getAttribute("data-book-id");
     borrowBook(bookId).then(function (result) {
         showNotification(result.message, result.success ? "success" : "error");
         if (result.success) {
@@ -351,7 +381,7 @@ function handleBorrow(e) {
 }
 
 function handleReturn(e) {
-    var loanId = e.target.getAttribute("data-loan-id");
+    const loanId = e.target.getAttribute("data-loan-id");
     returnBook(loanId).then(function (result) {
         showNotification(result.message, result.success ? "success" : "error");
         if (result.success) {
@@ -362,24 +392,24 @@ function handleReturn(e) {
 }
 
 function switchTab(tabName) {
-    var tabs = document.querySelectorAll(".tab");
-    for (var i = 0; i < tabs.length; i++) {
+    const tabs = document.querySelectorAll(".tab");
+    for (let i = 0; i < tabs.length; i++) {
         tabs[i].classList.remove("active");
         if (tabs[i].getAttribute("data-tab") === tabName) {
             tabs[i].classList.add("active");
         }
     }
 
-    var contents = document.querySelectorAll(".tab-content");
-    for (var j = 0; j < contents.length; j++) {
+    const contents = document.querySelectorAll(".tab-content");
+    for (let j = 0; j < contents.length; j++) {
         contents[j].classList.remove("active");
     }
     document.getElementById(tabName + "-section").classList.add("active");
 }
 
 function showPage(pageId) {
-    var pages = document.querySelectorAll(".page");
-    for (var i = 0; i < pages.length; i++) {
+    const pages = document.querySelectorAll(".page");
+    for (let i = 0; i < pages.length; i++) {
         pages[i].classList.remove("active");
     }
     document.getElementById(pageId).classList.add("active");
@@ -387,7 +417,7 @@ function showPage(pageId) {
 
 // ========== INIT ==========
 function initApp() {
-    var session = getCurrentUser();
+    const session = getCurrentUser();
     if (session) {
         showApp(session);
     } else {
@@ -396,11 +426,11 @@ function initApp() {
 
     document.getElementById("login-form").addEventListener("submit", function (e) {
         e.preventDefault();
-        var nim = document.getElementById("nim").value.trim();
-        var password = document.getElementById("password").value;
+        const nim = document.getElementById("nim").value.trim();
+        const password = document.getElementById("password").value;
         login(nim, password).then(function (result) {
             if (result.success) {
-                var user = getCurrentUser();
+                const user = getCurrentUser();
                 showApp(user);
                 document.getElementById("nim").value = "";
                 document.getElementById("password").value = "";
@@ -412,19 +442,20 @@ function initApp() {
     });
 
     document.getElementById("logout-btn").addEventListener("click", function () {
-        logout();
-        showPage("login-page");
+        logout().then(function () {
+            showPage("login-page");
+        });
     });
 
-    var searchInput = document.getElementById("search-input");
+    const searchInput = document.getElementById("search-input");
     if (searchInput) {
         searchInput.addEventListener("input", function () {
             applySearch(searchInput.value);
         });
     }
 
-    var tabs = document.querySelectorAll(".tab");
-    for (var i = 0; i < tabs.length; i++) {
+    const tabs = document.querySelectorAll(".tab");
+    for (let i = 0; i < tabs.length; i++) {
         tabs[i].addEventListener("click", function () {
             switchTab(this.getAttribute("data-tab"));
         });
@@ -433,7 +464,7 @@ function initApp() {
 
 function showApp(session) {
     document.getElementById("student-name").textContent = session.name;
-    var avatarEl = document.getElementById("avatar");
+    const avatarEl = document.getElementById("avatar");
     if (avatarEl) {
         avatarEl.textContent = (session.name || "?").charAt(0).toUpperCase();
     }
