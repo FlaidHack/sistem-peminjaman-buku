@@ -1,0 +1,13 @@
+{
+  "name": "sistem-peminjaman-buku",
+  "version": "1.0.0",
+  "description": "Orkestrasi 4 service: api-gateway + auth + catalog + loan (frontend dijalankan terpisah)",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --names \"GATEWAY,AUTH,CATALOG,LOAN\" --prefix-colors \"cyan,magenta,green,yellow\" \"npm:start --prefix api-gateway\" \"npm:start --prefix auth-service\" \"npm:start --prefix catalog-service\" \"npm:start --prefix loan-service\"",
+    "install:all": "npm install --prefix api-gateway && npm install --prefix auth-service && npm install --prefix catalog-service && npm install --prefix loan-service"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
