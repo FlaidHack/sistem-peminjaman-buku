@@ -128,7 +128,7 @@ Sumber kebenaran pengujian adalah Postman (`test.http` lama tidak dipakai).
 
 Isi collection `Perpustakaan-Gateway`:
 - `0-Health` — `GET /health` gateway (agregat 3 service).
-- `1-Auth` — login ok/`401`/`400`, `me` tanpa token `401`, `me` + `logout` `200`, token lama setelah logout tetap `200` (bukti logout stateless).
+- `1-Auth` — login ok/`401`/`400`, `me` tanpa token `401`, `me` + `logout` `200`, token lama setelah logout `401` (bukti logout stateful via `revoked_tokens`).
 - `2-Catalog` — list + detail buku.
 - `3-Loans` — pinjam `201` (isi `loanId`) → cek `borrowed` → list aktif → pinjam dobel `409` → `400`/`404` → return `200` → cek `available` → return lagi `404`.
 - `4-Security negatif` — tanpa Bearer `401`, direct `:3001/:3002/:3003` tanpa `x-api-key` `401`, key lama `x-internal-key` `401`, PATCH via gateway `404`.

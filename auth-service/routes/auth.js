@@ -1,5 +1,7 @@
 // Fase 1: login/logout/me + GET user internal (PRD §4.1).
+// Logout stateful: tiap JWT punya jti, logout memasukkan jti ke revoked_tokens.
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { query } = require('../db');
@@ -12,19 +14,31 @@ function getBearer(req) {
   return h.slice(7).trim() || null;
 }
 
-function requireJwt(req, res, next) {
+async function requireJwt(req, res, next) {
   const token = getBearer(req);
   if (!token) {
     return res.status(401).json({ success: false, message: 'Token tidak ditemukan' });
   }
+  let payload;
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.auth = payload;
-    req.token = token;
-    return next();
+    payload = jwt.verify(token, process.env.JWT_SECRET);
   } catch (err) {
     return res.status(401).json({ success: false, message: 'Token tidak valid atau kedaluwarsa' });
   }
+  if (!payload.jti) {
+    return res.status(401).json({ success: false, message: 'Token versi lama, silakan login ulang' });
+  }
+  try {
+    const rows = await query('SELECT jti FROM revoked_tokens WHERE jti = ?', [payload.jti]);
+    if (rows.length > 0) {
+      return res.status(401).json({ success: false, message: 'Token sudah logout, silakan login kembali' });
+    }
+  } catch (err) {
+    return res.status(503).json({ success: false, message: 'Database tidak tersedia' });
+  }
+  req.auth = payload;
+  req.token = token;
+  return next();
 }
 
 // POST /api/auth/login { nim, password } -> 200 { user, token } / 400 / 401
@@ -52,7 +66,7 @@ router.post('/auth/login', async (req, res) => {
   }
 
   const token = jwt.sign(
-    { sub: found.id, name: found.name },
+    { sub: found.id, name: found.name, jti: crypto.randomUUID() },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES || '2h' }
   );
@@ -64,8 +78,17 @@ router.post('/auth/login', async (req, res) => {
   });
 });
 
-// POST /api/auth/logout -> butuh Bearer valid -> 200 (stateless, formalitas)
-router.post('/auth/logout', requireJwt, (req, res) => {
+// POST /api/auth/logout -> butuh Bearer valid -> revoke jti -> 200
+// Idempotent: logout 2x dengan token yang sama tetap 200 (INSERT IGNORE).
+router.post('/auth/logout', requireJwt, async (req, res) => {
+  try {
+    await query(
+      'INSERT IGNORE INTO revoked_tokens (jti, user_id, expires_at) VALUES (?, ?, FROM_UNIXTIME(?))',
+      [req.auth.jti, req.auth.sub, req.auth.exp]
+    );
+  } catch (err) {
+    return res.status(503).json({ success: false, message: 'Database tidak tersedia' });
+  }
   return res.json({ success: true, message: 'Logout berhasil' });
 });
 
@@ -75,6 +98,21 @@ router.get('/auth/me', requireJwt, (req, res) => {
     success: true,
     user: { id: req.auth.sub, name: req.auth.name }
   });
+});
+
+// GET /api/internal/sessions/check?jti=... -> internal untuk gateway (wajib x-api-key).
+// Dipakai gateway setiap request proteksi supaya token yang sudah logout ditolak di semua endpoint.
+router.get('/internal/sessions/check', async (req, res) => {
+  const jti = req.query.jti;
+  if (!jti) {
+    return res.status(400).json({ success: false, message: 'jti harus diisi' });
+  }
+  try {
+    const rows = await query('SELECT jti FROM revoked_tokens WHERE jti = ?', [jti]);
+    return res.json({ success: true, revoked: rows.length > 0 });
+  } catch (err) {
+    return res.status(503).json({ success: false, message: 'Database tidak tersedia' });
+  }
 });
 
 // GET /api/users/:id -> internal untuk loan-service (wajib x-api-key via global middleware), tanpa password

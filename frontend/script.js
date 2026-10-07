@@ -106,7 +106,7 @@ function login(nim, password) {
 }
 
 function logout() {
-    // Fase 5: logout server-side best-effort (stateless, tanpa blacklist).
+    // Logout stateful: server me-revoke jti, token lama langsung 401.
     // Sesi lokal selalu dibersihkan walau request gagal (mis. token expired).
     const user = getCurrentUser();
     const token = user && user.token;

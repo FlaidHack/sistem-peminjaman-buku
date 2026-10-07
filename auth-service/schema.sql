@@ -5,3 +5,10 @@ CREATE TABLE IF NOT EXISTS users (
   name VARCHAR(100) NOT NULL,
   password_hash VARCHAR(255) NOT NULL
 ) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+  jti VARCHAR(36) PRIMARY KEY,
+  user_id VARCHAR(20) NOT NULL,
+  revoked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  INDEX idx_revoked_exp (expires_at)
+) ENGINE=InnoDB;

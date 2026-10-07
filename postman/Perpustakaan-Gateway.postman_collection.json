@@ -51,7 +51,7 @@
     },
     {
       "name": "1-Auth",
-      "description": "Login MHS001/password 123456 WAJIB dikirim dulu: mengisi variabel jwt untuk semua request proteksi. Diakhiri bukti logout stateless (token lama masih 200).",
+      "description": "Login MHS001/password 123456 WAJIB dikirim dulu: mengisi variabel jwt untuk semua request proteksi. Diakhiri bukti logout stateful (token lama ditolak 401).",
       "item": [
         {
           "name": "Login MHS001 (isi jwt)",
@@ -242,7 +242,7 @@
               "host": ["{{gateway}}"],
               "path": ["api", "auth", "logout"]
             },
-            "description": "Logout stateless: server hanya formalitas 200, token TIDAK di-blacklist."
+            "description": "Logout stateful: server revoke jti ke revoked_tokens, token lama langsung 401."
           },
           "response": [],
           "event": [
@@ -263,7 +263,7 @@
           ]
         },
         {
-          "name": "Me token lama setelah logout -> 200 (stateless)",
+          "name": "Me token lama setelah logout -> 401 (revoked)",
           "request": {
             "method": "GET",
             "header": [
@@ -274,7 +274,7 @@
               "host": ["{{gateway}}"],
               "path": ["api", "auth", "me"]
             },
-            "description": "BUKTI logout stateless: token tetap valid sampai expired (2 jam). Keterbatasan yang diterima (PRD risiko). Frontend menanganinya dengan clearSession() lokal."
+            "description": "BUKTI logout stateful: token masuk revoked_tokens saat logout, jadi token lama ditolak 401 di gateway + auth-service."
           },
           "response": [],
           "event": [
@@ -283,11 +283,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status tetap 200 = token tidak di-blacklist\", function () {",
-                  "    pm.response.to.have.status(200);",
+                  "pm.test(\"Status 401 = token sudah di-revoke\", function () {",
+                  "    pm.response.to.have.status(401);",
                   "});",
-                  "pm.test(\"success true\", function () {",
-                  "    pm.expect(pm.response.json().success).to.eql(true);",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
                   "});"
                 ]
               }
