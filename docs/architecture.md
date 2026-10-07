@@ -113,3 +113,87 @@ Alur return analog: hapus loan dulu, PATCH `available`, gagal → loan dikembali
 
 Keterbatasan yang diketahui: race condition dua peminjam bersamaan untuk buku yang sama
 (check-then-act tanpa lock) — di luar scope, cukup didokumentasikan.
+
+## 6. Arsitektur Akhir — Gateway + MySQL + JWT (Fase 4–6)
+
+Tahap JSON-file (bagian 2–5) dimigrasikan ke **satu pintu api-gateway (`:3000`)**,
+autentikasi **JWT (expiry 2 jam)**, proteksi antar-service via **`x-api-key`**,
+dan penyimpanan **MySQL dengan DB-per-service** (1 server, 3 database).
+Frontend (`frontend/script.js`) hanya kenal `gatewayBaseUrl: http://localhost:3000`
+dan mengirim `Authorization: Bearer` tiap request kecuali login.
+
+### Diagram Arsitektur Gateway
+
+```mermaid
+flowchart TB
+    subgraph FE["FRONTEND — statis"]
+        UI["frontend/<br/>index.html · style.css · script.js<br/>(hanya panggil :3000 + Bearer JWT)"]
+    end
+
+    subgraph GW["API-GATEWAY :3000"]
+        VFY["verifyJwt + ROUTES<br/>inject x-user-id + x-api-key<br/>GET /health (agregat)"]
+    end
+
+    subgraph SVC["SERVICE (Node.js + Express)"]
+        AUTH["auth-service :3003<br/>auth_db.users"]
+        CAT["catalog-service :3001<br/>catalog_db.books"]
+        LOAN["loan-service :3002<br/>loan_db.loans"]
+    end
+
+    subgraph DB["MYSQL — 1 server, DB-per-service"]
+        ADB[("auth_db<br/>users")]
+        CDB[("catalog_db<br/>books")]
+        LDB[("loan_db<br/>loans")]
+    end
+
+    UI -- "HTTP :3000<br/>/api/auth/*, /api/books, /api/loans" --> VFY
+    VFY -- "x-api-key AUTH_API_KEY" --> AUTH
+    VFY -- "x-api-key CATALOG_API_KEY" --> CAT
+    VFY -- "x-api-key LOAN_API_KEY" --> LOAN
+    AUTH --- ADB
+    CAT --- CDB
+    LOAN --- LDB
+    LOAN -- "validasi user (x-api-key)" --> AUTH
+    LOAN -- "validasi + PATCH status buku (x-api-key)" --> CAT
+```
+
+| Bagian | Port | Kepemilikan data | Kunci akses |
+|--------|------|------------------|-------------|
+| `api-gateway` | 3000 | — (stateless, verify JWT) | `JWT_SECRET` + 3 API key |
+| `auth-service` | 3003 | `auth_db.users` | `AUTH_API_KEY` + `JWT_SECRET` |
+| `catalog-service` | 3001 | `catalog_db.books` | `CATALOG_API_KEY` |
+| `loan-service` | 3002 | `loan_db.loans` | `LOAN_API_KEY` (+ key catalog/auth untuk panggil S1/S3) |
+| `frontend/` | via Live Server / `npx serve` | — | Bearer JWT saja (tidak tahu API key) |
+
+Aturan yang ditegakkan gateway (`api-gateway/routes/proxy.js`):
+- Header `x-api-key`/`x-user-id` dari browser **dihapus lalu di-inject ulang** dari JWT
+  yang terverifikasi (tidak bisa dipalsukan dari frontend).
+- `PATCH /api/books/:id` **tidak diteruskan** (endpoint internal loan-service) → `404`.
+- Direct call ke `:3001/:3002/:3003` tanpa `x-api-key` → `401`.
+
+### DB-per-service
+
+Satu server MySQL lokal (`localhost:3306, root, password kosong`), tiap service hanya
+membuka **satu `DB_NAME`** miliknya (`auth-service/db.js` → `auth_db`, dst.).
+Tidak ada join lintas DB dan tidak ada akses file/data service lain:
+`loan-service` memvalidasi user & buku murni lewat HTTP ke auth/catalog-service.
+Skema final terdefinisi di `auth-service/{schema,seed}.sql`,
+`catalog-service/{schema,seed}.sql`, `loan-service/schema.sql` (diimport via phpMyAdmin).
+
+### Catatan logout stateless (disepakati, keterbatasan diterima)
+
+`POST /api/auth/logout` hanya formalitas `200`: **tanpa tabel blacklist**, sehingga
+token curian/hasil login lama **tetap valid sampai expired (2 jam)**.
+Bukti: request Postman `1-Auth / Me token lama setelah logout → 200 (stateless)`.
+Mitigasi yang dipakai: expiry pendek 2 jam, `.env` (berisi `JWT_SECRET`/API key)
+tidak di-commit, dan frontend selalu `clearSession()` lokal saat logout atau saat
+menerima `401`. Ini disepakati sebagai keterbatasan proyek yang diterima.
+
+### Verifikasi Fase 6
+
+Pengujian sumber-kebenaran memakai Postman: `postman/Perpustakaan-Gateway.postman_collection.json`
+(folder `0-Health`, `1-Auth`, `2-Catalog`, `3-Loans`, `4-Security negatif`, tiap request
+ada `Tests` + `pm.environment.set("jwt"/"loanId")`) dengan environment `postman/Local.postman_environment.json`.
+Uji wajib per laptop: `GET :3000/health` → login MHS001 → pinjam B001 (`borrowed`) →
+return (`available`), plus simulasi catalog mati → `503` tanpa loan nyangkut.
+Lihat [README](../README.md) (cara run 4 service + import Postman).

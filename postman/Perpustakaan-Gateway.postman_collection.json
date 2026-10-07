@@ -1,0 +1,942 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-0000-4000-8000-perpusgateway1",
+    "name": "Perpustakaan-Gateway",
+    "description": "Fase 6: pengujian end-to-end Sistem Peminjaman Buku lewat api-gateway (:3000).\n\nCARA PAKAI:\n1. Postman -> Import -> Folder -> pilih folder postman/ (collection + environment ikut masuk).\n2. Pilih environment \"Local\" di kanan atas.\n3. Pastikan 4 service jalan (auth :3003, catalog :3001, loan :3002, gateway :3000) + MySQL + SQL sudah diimport.\n4. Kirim request \"Login MHS001\" dulu (mengisi variabel jwt), lalu Collection Runner dari atas ke bawah.\n\nUrutan penting: 0-Health -> 1-Auth (login dulu) -> 2-Catalog -> 3-Loans (pinjam mengisi loanId, return di akhir) -> 4-Security negatif.\nJika request \"Pinjam B001\" dapat 409, berarti buku masih dipinjam dari run sebelumnya: jalankan \"Return\" dulu, lalu ulangi dari \"Pinjam\".\nSumber kebenaran pengujian adalah collection ini (lihat PRD Fase 6).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0-Health",
+      "description": "Cek gateway + agregat status ketiga service. Semua harus hijau sebelum lanjut.",
+      "item": [
+        {
+          "name": "Health Gateway",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/health",
+              "host": ["{{gateway}}"],
+              "path": ["health"]
+            },
+            "description": "GET /health gateway: agregat /health auth :3003, catalog :3001, loan :3002. 200 = semua ok, 503 = degraded."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"success true + service api-gateway\", function () {",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.service).to.eql(\"api-gateway\");",
+                  "});",
+                  "pm.test(\"auth, catalog, loan semua ok\", function () {",
+                  "    pm.expect(json.services.auth.ok).to.eql(true);",
+                  "    pm.expect(json.services.catalog.ok).to.eql(true);",
+                  "    pm.expect(json.services.loan.ok).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1-Auth",
+      "description": "Login MHS001/password 123456 WAJIB dikirim dulu: mengisi variabel jwt untuk semua request proteksi. Diakhiri bukti logout stateless (token lama masih 200).",
+      "item": [
+        {
+          "name": "Login MHS001 (isi jwt)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nim\": \"{{studentId}}\",\n  \"password\": \"123456\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{gateway}}/api/auth/login",
+              "host": ["{{gateway}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Kirim DULU sebelum request lain. Menyimpan token JWT (2 jam) ke variabel lingkungan jwt."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"success true + user MHS001\", function () {",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.user.id).to.eql(pm.environment.get(\"studentId\"));",
+                  "});",
+                  "pm.test(\"token ada dan disimpan ke jwt\", function () {",
+                  "    pm.expect(json.token).to.be.a(\"string\").and.not.empty;",
+                  "    pm.environment.set(\"jwt\", json.token);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login password salah -> 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nim\": \"{{studentId}}\",\n  \"password\": \"salah\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{gateway}}/api/auth/login",
+              "host": ["{{gateway}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login field kosong -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{gateway}}/api/auth/login",
+              "host": ["{{gateway}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me tanpa token -> 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/api/auth/me",
+              "host": ["{{gateway}}"],
+              "path": ["api", "auth", "me"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me dengan token -> 200",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/auth/me",
+              "host": ["{{gateway}}"],
+              "path": ["api", "auth", "me"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"profil sesuai klaim JWT\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.user.id).to.eql(pm.environment.get(\"studentId\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout -> 200",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/auth/logout",
+              "host": ["{{gateway}}"],
+              "path": ["api", "auth", "logout"]
+            },
+            "description": "Logout stateless: server hanya formalitas 200, token TIDAK di-blacklist."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"success true\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me token lama setelah logout -> 200 (stateless)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/auth/me",
+              "host": ["{{gateway}}"],
+              "path": ["api", "auth", "me"]
+            },
+            "description": "BUKTI logout stateless: token tetap valid sampai expired (2 jam). Keterbatasan yang diterima (PRD risiko). Frontend menanganinya dengan clearSession() lokal."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status tetap 200 = token tidak di-blacklist\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"success true\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2-Catalog",
+      "description": "Katalog via gateway (butuh Bearer). Baca saja; update status hanya lewat loan-service.",
+      "item": [
+        {
+          "name": "List buku -> 200",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/books",
+              "host": ["{{gateway}}"],
+              "path": ["api", "books"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"books array tidak kosong\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.books).to.be.an(\"array\").with.length.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detail B001 -> 200",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/books/{{bookId}}",
+              "host": ["{{gateway}}"],
+              "path": ["api", "books", "{{bookId}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"book sesuai + status valid\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.book.id).to.eql(pm.environment.get(\"bookId\"));",
+                  "    pm.expect(json.book.status).to.be.oneOf([\"available\", \"borrowed\"]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3-Loans",
+      "description": "Uji wajib: pinjam B001 -> borrowed -> return -> available. JALANKAN BERURUTAN: Pinjam mengisi loanId, Return memakai loanId.",
+      "item": [
+        {
+          "name": "Pinjam B001 -> 201 (isi loanId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"{{studentId}}\",\n  \"bookId\": \"{{bookId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{gateway}}/api/loans",
+              "host": ["{{gateway}}"],
+              "path": ["api", "loans"]
+            },
+            "description": "Menyimpan loan.id ke variabel loanId. Jika 409: buku masih dipinjam dari run sebelumnya, jalankan Return dulu."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"loan tercatat + dueDate +7 hari\", function () {",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.loan.studentId).to.eql(pm.environment.get(\"studentId\"));",
+                  "    pm.expect(json.loan.bookId).to.eql(pm.environment.get(\"bookId\"));",
+                  "    pm.expect(json.loan.dueDate).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "pm.test(\"loanId disimpan\", function () {",
+                  "    pm.expect(json.loan.id).to.be.a(\"string\").and.not.empty;",
+                  "    pm.environment.set(\"loanId\", json.loan.id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cek B001 = borrowed",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/books/{{bookId}}",
+              "host": ["{{gateway}}"],
+              "path": ["api", "books", "{{bookId}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"status borrowed\", function () {",
+                  "    pm.expect(pm.response.json().book.status).to.eql(\"borrowed\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List aktif MHS001 -> 200",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/loans?studentId={{studentId}}",
+              "host": ["{{gateway}}"],
+              "path": ["api", "loans"],
+              "query": [
+                { "key": "studentId", "value": "{{studentId}}" }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"memuat loanId aktif + judul\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    var ids = json.loans.map(function (l) { return l.id; });",
+                  "    pm.expect(ids).to.include(pm.environment.get(\"loanId\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pinjam B001 lagi -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"{{studentId}}\",\n  \"bookId\": \"{{bookId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{gateway}}/api/loans",
+              "host": ["{{gateway}}"],
+              "path": ["api", "loans"]
+            },
+            "description": "Buku sedang borrowed -> ditolak 409."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pinjam tanpa bookId -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"{{studentId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{gateway}}/api/loans",
+              "host": ["{{gateway}}"],
+              "path": ["api", "loans"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pinjam buku tidak ada -> 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"{{studentId}}\",\n  \"bookId\": \"B999\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{gateway}}/api/loans",
+              "host": ["{{gateway}}"],
+              "path": ["api", "loans"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Return -> 200",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/loans/{{loanId}}/return",
+              "host": ["{{gateway}}"],
+              "path": ["api", "loans", "{{loanId}}", "return"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"success true\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cek B001 = available",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/books/{{bookId}}",
+              "host": ["{{gateway}}"],
+              "path": ["api", "books", "{{bookId}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"status available\", function () {",
+                  "    pm.expect(pm.response.json().book.status).to.eql(\"available\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Return lagi -> 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/loans/{{loanId}}/return",
+              "host": ["{{gateway}}"],
+              "path": ["api", "loans", "{{loanId}}", "return"]
+            },
+            "description": "Loan sudah dihapus -> 404."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4-Security negatif",
+      "description": "Kasus negatif: tanpa Bearer, token palsu, direct ke service tanpa x-api-key, key lama, dan endpoint internal yang diblokir gateway.",
+      "item": [
+        {
+          "name": "Tanpa Bearer ke books -> 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway}}/api/books",
+              "host": ["{{gateway}}"],
+              "path": ["api", "books"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bearer palsu -> 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer token-palsu-ini" }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/books",
+              "host": ["{{gateway}}"],
+              "path": ["api", "books"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Direct catalog :3001 tanpa key -> 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3001/api/books",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "books"]
+            },
+            "description": "Akses langsung ke service tanpa x-api-key harus ditolak (acceptance PRD)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Direct loan :3002 tanpa key -> 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3002/api/loans?studentId={{studentId}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3002",
+              "path": ["api", "loans"],
+              "query": [
+                { "key": "studentId", "value": "{{studentId}}" }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Direct auth :3003 tanpa key -> 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nim\": \"{{studentId}}\",\n  \"password\": \"123456\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "http://localhost:3003/api/auth/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3003",
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Key lama x-internal-key -> 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-internal-key", "value": "kunci-lama-tahap-3" }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/books",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "books"]
+            },
+            "description": "Header lama tahap JSON (x-internal-key) tidak lagi diakui: hanya x-api-key."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"success false\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH books via gateway -> 404 (diblokir)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"borrowed\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{gateway}}/api/books/{{bookId}}",
+              "host": ["{{gateway}}"],
+              "path": ["api", "books", "{{bookId}}"]
+            },
+            "description": "PATCH /api/books/:id adalah endpoint internal loan-service; gateway sengaja tidak meneruskannya -> 404."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "pm.test(\"endpoint tidak ditemukan\", function () {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": []
+}
