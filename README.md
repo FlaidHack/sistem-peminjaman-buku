@@ -35,7 +35,7 @@ api-gateway (`:3000`)** — frontend tidak pernah memanggil `:3001/:3002/:3003` 
 - **loan-service (:3002)** — owner `loan_db.loans`. Tidak membaca DB service lain; validasi user via auth-service dan buku via catalog-service (HTTP + `x-api-key`, timeout 5 detik). Endpoint: `POST /api/loans`, `GET /api/loans?studentId=`, `POST /api/loans/:id/return`.
 - Direct call ke `:3001/:3002/:3003` tanpa `x-api-key` → `401`.
 
-> Lihat detail: [dokumentasi arsitektur](docs/architecture.md) — diagram gateway, DB-per-service, catatan logout stateless.
+> Lihat detail: [dokumentasi arsitektur](docs/architecture.md) — diagram gateway, DB-per-service, catatan logout stateful.
 
 ## Penggunaan AI
 
