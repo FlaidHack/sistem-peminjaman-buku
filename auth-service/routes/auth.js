@@ -79,7 +79,7 @@ router.post('/auth/login', async (req, res) => {
 });
 
 // POST /api/auth/logout -> butuh Bearer valid -> revoke jti -> 200
-// Idempotent: logout 2x dengan token yang sama tetap 200 (INSERT IGNORE).
+// logout 2x dengan token yang sama tetap 401.
 router.post('/auth/logout', requireJwt, async (req, res) => {
   try {
     await query(

@@ -21,7 +21,7 @@ aturan bisnis (maksimal 3 pinjaman aktif, jatuh tempo +7 hari, buku yang sedang 
 - **Auth:** JWT (expiry 2 jam) + API Key per service (`x-api-key`)
 - **Database:** MySQL (1 server, 3 database: `auth_db`, `catalog_db`, `loan_db`)
 - **Frontend:** HTML, CSS, JavaScript (statis, hanya memanggil api-gateway)
-- **Pengujian:** Postman (`postman/`) — sumber kebenaran pengujian
+- **Pengujian:** Postman (`api-test/postman/`) — sumber kebenaran pengujian
 - **Komunikasi antar-service:** HTTP REST API (`fetch`)
 
 ## Microservice
@@ -35,17 +35,18 @@ api-gateway (`:3000`)** — frontend tidak pernah memanggil `:3001/:3002/:3003` 
 - **loan-service (:3002)** — owner `loan_db.loans`. Tidak membaca DB service lain; validasi user via auth-service dan buku via catalog-service (HTTP + `x-api-key`, timeout 5 detik). Endpoint: `POST /api/loans`, `GET /api/loans?studentId=`, `POST /api/loans/:id/return`.
 - Direct call ke `:3001/:3002/:3003` tanpa `x-api-key` → `401`.
 
-> Lihat detail: [dokumentasi arsitektur](docs/architecture.md) — diagram gateway, DB-per-service, catatan logout stateful.
+> Lihat detail: [dokumentasi arsitektur](docs/ARCHITECTURE.md) — diagram gateway, DB-per-service, catatan logout stateful.
+> Kontrak API lengkap: [docs/API_CONTRACT.md](docs/API_CONTRACT.md).
 
 ## Penggunaan AI
 
-AI coding tool yang digunakan selama pengembangan adalah **Opencode**,**claude**. AI berperan dalam
+AI coding tool yang digunakan selama pengembangan adalah **Opencode** dan **Claude**. AI berperan dalam
 perencanaan migrasi dari arsitektur monolitik ke microservice, pembangunan catalog-service dan
-loan-service, integrasi antar service, adaptasi serta redesign frontend agar memakai API dari
-service, debugging bug (misalnya web blank/double refresh akibat masalah live server), hingga
-bantuan penyusunan dokumentasi.
+loan-service, pemisahan auth-service, penambahan api-gateway, integrasi antar service, adaptasi
+serta redesign frontend agar memakai API dari service, debugging bug (misalnya web blank/double
+refresh akibat masalah live server), hingga bantuan penyusunan dokumentasi.
 
-> Lihat detail: [dokumentasi penggunaan AI](docs/ai.md)
+> Lihat detail: [dokumentasi penggunaan AI](docs/AI_USAGE.md)
 
 ## Alur Sistem
 
@@ -118,11 +119,11 @@ Lalu buka URL-nya di browser dan login (NIM `MHS001`, password `123456`).
 
 ## Pengujian dengan Postman (Fase 6)
 
-Sumber kebenaran pengujian adalah Postman (`test.http` lama tidak dipakai).
+Sumber kebenaran pengujian adalah Postman (`api-test/postman/`).
 
 ### Import
 
-1. Postman → **Import → Folder** → pilih folder `postman/` (collection + environment ikut masuk).
+1. Postman → **Import → Folder** → pilih folder `api-test/postman/` (collection + environment ikut masuk).
 2. Pilih environment **Local** di kanan atas.
 3. Kirim request **Login MHS001** dulu (mengisi variabel `jwt`), baru jalankan **Collection Runner dari atas ke bawah**.
 
@@ -147,4 +148,4 @@ Setiap request sudah punya **Tests** (assert status + body); request Login menyi
    - Nyalakan lagi `catalog-service`, ulangi pinjam → `201` normal.
 6. Runner Postman dari atas ke bawah hijau semua.
 
-> Acuan arsitektur: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Sumber kebenaran pengujian: collection Postman di `postman/`.
+> Acuan arsitektur: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Sumber kebenaran pengujian: collection Postman di `api-test/postman/`.

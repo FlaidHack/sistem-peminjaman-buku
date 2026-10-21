@@ -112,12 +112,13 @@ Keterbatasan yang diketahui: race condition dua peminjam bersamaan untuk buku ya
 
 Keterbatasan yang diketahui: identitas peminjam belum dicocokkan dengan JWT.
 `studentId` pada `POST /api/loans` (body) dan `GET /api/loans` (query) dipakai apa adanya
-oleh `loan-service`, sedangkan `x-user-id` yang di-inject gateway dari JWT belum dibaca.
-Akibatnya user ber-JWT valid bisa meminjam/melihat loan atas nama `studentId` lain,
-`GET /api/loans` tanpa `studentId` mengembalikan semua loan, dan
-`POST /api/loans/:id/return` tidak mengecek pemilik loan.
-Perbaikan lanjutan: pakai `x-user-id` sebagai identitas peminjam (abaikan/tolak `studentId`
-yang berbeda, filter `GET` dan cek kepemilikan saat return berdasarkan `x-user-id`).
+oleh `loan-service`; `POST` hanya memvalidasi bahwa user tersebut ada di auth-service,
+bukan bahwa ia sama dengan pemilik token (`sub`). `x-user-id` yang di-inject gateway dari
+JWT juga belum dibaca. Akibatnya user ber-JWT valid bisa meminjam, melihat, atau
+mengembalikan loan atas nama `studentId` lain; `GET /api/loans` tanpa `studentId`
+mengembalikan semua loan. Perbaikan lanjutan: pakai `x-user-id` sebagai identitas peminjam
+(abaikan/tolak `studentId` yang berbeda, filter `GET`, dan cek kepemilikan saat return
+berdasarkan `x-user-id`).
 
 ### DB-per-service
 
@@ -141,9 +142,9 @@ Token tanpa `jti` (terbitan lama) ditolak `401` dan harus login ulang.
 
 ### Verifikasi Fase 6
 
-Pengujian sumber-kebenaran memakai Postman: `postman/Perpustakaan-Gateway.postman_collection.json`
+Pengujian sumber-kebenaran memakai Postman: `api-test/postman/Perpustakaan-Gateway.postman_collection.json`
 (folder `0-Health`, `1-Auth`, `2-Catalog`, `3-Loans`, `4-Security negatif`, tiap request
-ada `Tests` + `pm.environment.set("jwt"/"loanId")`) dengan environment `postman/Local.postman_environment.json`.
+ada `Tests` + `pm.environment.set("jwt"/"loanId")`) dengan environment `api-test/postman/Local.postman_environment.json`.
 Uji wajib per laptop: `GET :3000/health` → login MHS001 → pinjam B001 (`borrowed`) →
 return (`available`), plus simulasi catalog mati → `503` tanpa loan nyangkut.
 Lihat [README](../README.md) (cara run 4 service + import Postman).

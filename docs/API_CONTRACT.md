@@ -23,7 +23,7 @@ Frontend hanya memanggil gateway. Direct call ke `:3001/:3002/:3003` tanpa `x-ap
 | `Authorization: Bearer <jwt>` | Semua endpoint gateway kecuali `POST /api/auth/login` dan `GET /health` | JWT dari login, masa berlaku default 2 jam (`JWT_EXPIRES`) |
 | `Content-Type: application/json` | Semua request yang punya body | Gateway meneruskan body mentah ke service |
 | `x-api-key` | Semua endpoint internal (`:3001/:3002/:3003`) | Di-inject gateway; header dari browser dihapus dan diganti |
-| `x-user-id` | Tidak dikirim client | Di-inject gateway dari klaim `sub` JWT |
+| `x-user-id` | Tidak dikirim client | Di-inject gateway dari klaim `sub` JWT (belum dibaca loan-service; lihat §4 butir 1) |
 
 ### Format respons
 
@@ -404,6 +404,8 @@ Response:
 6. Setelah loan tersimpan, status buku diubah ke `borrowed` lewat catalog-service. Jika gagal, loan dihapus (rollback) dan respons `503`, sehingga tidak ada loan yatim.
 7. Urutan pengecekan: field wajib → user → buku ada → buku `available` → kuota.
 
+> **Catatan keamanan:** `studentId` hanya divalidasi keberadaannya di auth-service, belum dicocokkan dengan `sub` JWT. Lihat §4 butir 1.
+
 **Contoh berhasil — `201`**
 
 Request:
@@ -519,6 +521,8 @@ Response:
 - Setiap item diperkaya dengan `title` dari katalog; `title` bernilai `null` jika buku sudah tidak ada di katalog.
 - Hanya pinjaman aktif yang ada di daftar (pinjaman yang dikembalikan dihapus dari tabel).
 
+> **Catatan keamanan:** parameter `studentId` tidak dicocokkan dengan JWT; tanpa parameter, semua pinjaman dikembalikan. Lihat §4 butir 1.
+
 **Contoh berhasil — `200`** (`GET /api/loans?studentId=MHS001`)
 
 ```json
@@ -573,6 +577,8 @@ Contoh berhasil, belum ada pinjaman — `200`:
 2. Loan dihapus dari `loan_db.loans`, lalu status buku diubah ke `available` lewat catalog-service.
 3. Jika update status buku gagal, loan dimasukkan kembali (rollback) dan respons `503`.
 4. Setelah berhasil, loan tidak muncul lagi di `GET /api/loans` dan kuota 3 buku peminjam berkurang satu.
+
+> **Catatan keamanan:** endpoint ini tidak mengecek apakah loan milik user yang sedang login. Lihat §4 butir 1.
 
 **Contoh berhasil — `200`**
 
@@ -738,6 +744,6 @@ Response:
 
 ## 4. Catatan & Keterbatasan
 
-- **Identitas peminjam belum dicocokkan dengan JWT.** `studentId` pada `POST /api/loans` (body) dan `GET /api/loans` (query) dipakai apa adanya oleh loan-service, sedangkan `x-user-id` yang di-inject gateway belum dibaca. Akibatnya `GET /api/loans` tanpa `studentId` mengembalikan semua pinjaman, dan `POST /api/loans/:id/return` tidak mengecek pemilik loan. Perbaikan lanjutan: pakai `x-user-id` sebagai identitas peminjam.
+- **Identitas peminjam belum dicocokkan dengan JWT.** `studentId` pada `POST /api/loans` (body) dan `GET /api/loans` (query) dipakai apa adanya oleh loan-service. Pada `POST`, loan-service memang memvalidasi bahwa user dengan `studentId` tersebut ada di auth-service, tetapi tidak membandingkannya dengan klaim `sub` JWT; `x-user-id` yang di-inject gateway juga belum dibaca. Akibatnya user ber-JWT valid dapat meminjam atas nama `studentId` lain, `GET /api/loans` tanpa `studentId` mengembalikan semua pinjaman, dan `POST /api/loans/:id/return` tidak mengecek pemilik loan. Kontrak §2.8–2.10 mendokumentasikan perilaku saat ini. Perbaikan lanjutan: pakai `x-user-id` sebagai identitas peminjam (abaikan/tolak `studentId` yang berbeda, filter `GET`, dan cek kepemilikan saat return berdasarkan `x-user-id`).
 - **Race condition:** dua peminjam bersamaan untuk buku yang sama (check-then-act tanpa lock) belum ditangani.
 - `borrowDate` dan `dueDate` memakai tanggal UTC.

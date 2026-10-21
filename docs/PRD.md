@@ -114,11 +114,10 @@ vbecod/
 ├── frontend/
 │   ├── index.html / style.css (tetap)
 │   └── script.js           # UBAH: satu gatewayBaseUrl + Bearer
-├── postman/                # BARU
+├── api-test/postman/       # BARU
 │   ├── Perpustakaan-Gateway.postman_collection.json
 │   └── Local.postman_environment.json
-├── docs/architecture.md    # UBAH
-├── test.http               # dipertahankan, tandai deprecated
+├── docs/ARCHITECTURE.md    # UBAH
 └── README.md               # UBAH
 ```
 
@@ -262,11 +261,11 @@ CATALOG_TIMEOUT_MS=5000
 * `apiRequest()` selalu kirim `Authorization: Bearer <token>` (kecuali login); hapus header `x-user-id` manual.
 * `login()` → `POST {gateway}/api/auth/login`; `logout()` → `clearSession()` dulu lalu best-effort `POST {gateway}/api/auth/logout`. Server me-revoke `jti`, token lama langsung `401`. UI/HTML/CSS tidak berubah.
 
-## 10. Postman (2 file dalam `postman/`)
+## 10. Postman (2 file dalam `api-test/postman/`)
 
 * `Perpustakaan-Gateway.postman_collection.json` — folder: `0-Health`, `1-Auth` (login ok/401/400, me tanpa token 401, logout 200, me token lama → 401 revoked = bukti stateful), `2-Catalog`, `3-Loans` (201/409/400/404/return), `4-Security negatif` (tanpa Bearer 401, direct `:3001/:3002/:3003` tanpa `x-api-key` 401, key lama `x-internal-key` 401). Tiap request pasang `Tests`: assert status + `pm.environment.set("jwt"/"loanId")`.
 * `Local.postman_environment.json` — variabel `gateway=http://localhost:3000, jwt, studentId=MHS001, bookId=B001, loanId`.
-* Import: Postman → **Import → Folder** → pilih `postman/` → pilih environment **Local** di kanan atas → Send `login` dulu → Runner dari atas ke bawah.
+* Import: Postman → **Import → Folder** → pilih `api-test/postman/` → pilih environment **Local** di kanan atas → Send `login` dulu → Runner dari atas ke bawah.
 
 ## 11. Cara kerja lintas perangkat (checklist tiap laptop)
 
@@ -275,7 +274,7 @@ CATALOG_TIMEOUT_MS=5000
 3. Copy tiap `.env.example` → `.env`, isi key/secret (minta 1 set dari ketua agar seragam).
 4. Tiap service: `npm install` sekali, lalu 4 terminal: `node server.js` di `auth-service`, `catalog-service`, `loan-service`, `api-gateway`. Cek `GET :3000/health`.
 5. Frontend: `npx serve frontend` (atau Live Server dari folder `frontend/`, bukan root).
-6. Postman: import folder `postman/`, pilih env `Local`, login MHS001/`123456`.
+6. Postman: import folder `api-test/postman/`, pilih env `Local`, login MHS001/`123456`.
 7. Uji wajib: pinjam B001 → `GET books/B001` = `borrowed`; return → `available`; matikan catalog → pinjam = `503` dan loan tidak tercatat.
 
 ## 12. Fase pengerjaan (urutan eksekusi lintas perangkat)
@@ -328,8 +327,8 @@ Kerjakan berurutan Fase 0 → 6. Setiap fase selesai = di-commit + teman lain pu
 * Done: tidak ada lagi fetch langsung ke `:3001/:3002`; commit frontend.
 
 ### Fase 6 — Postman + docs + verifikasi lintas laptop (tugas E)
-* Yang dikerjakan: buat `postman/Perpustakaan-Gateway.postman_collection.json` (folder `0-Health`, `1-Auth`, `2-Catalog`, `3-Loans`, `4-Security negatif`, tiap request ada `Tests` + `pm.environment.set("jwt"/"loanId")`) + `postman/Local.postman_environment.json`; update `README.md` + `docs/architecture.md`; tandai `test.http` deprecated.
-* Verifikasi per laptop (sesuai §11): import folder `postman/` → env `Local` → login → Runner atas→bawah hijau; uji wajib pinjam→borrowed→return→available + simulasi catalog mati → `503` tanpa loan nyangkut.
+* Yang dikerjakan: buat `api-test/postman/Perpustakaan-Gateway.postman_collection.json` (folder `0-Health`, `1-Auth`, `2-Catalog`, `3-Loans`, `4-Security negatif`, tiap request ada `Tests` + `pm.environment.set("jwt"/"loanId")`) + `api-test/postman/Local.postman_environment.json`; update `README.md` + `docs/ARCHITECTURE.md`.
+* Verifikasi per laptop (sesuai §11): import folder `api-test/postman/` → env `Local` → login → Runner atas→bawah hijau; uji wajib pinjam→borrowed→return→available + simulasi catalog mati → `503` tanpa loan nyangkut.
 * Done: semua checklist §11 + acceptance §14 lolos di minimal 2 laptop berbeda; merge final.
 
 Ringkasan ketergantungan: `0 → 1 → 2 → 3 → 4 → 5 → 6`. Jangan loncat (misal gateway Fase 4 butuh JWT secret Fase 1 + key Fase 3).
@@ -357,6 +356,6 @@ Urutan merge: A → B/C → D → E.
 
 * Logout stateful: `revoked_tokens` tumbuh — butuh cleanup periodik by `expires_at`; gateway fail-closed ke auth (`503` saat auth mati) — diterima sebagai tradeoff keamanan.
 * Secret/key beda antar laptop → wajib 1 set seragam dari ketua.
-* Race condition 2 peminjam bersamaan (check-then-act tanpa lock) — di luar scope, cukup didokumentasikan (sudah ada di `architecture.md`).
-* `studentId` pada `POST` dan `GET /api/loans` belum dicocokkan dengan `x-user-id` dari JWT (juga berlaku untuk `GET /api/loans` tanpa filter dan `POST /api/loans/:id/return` tanpa cek pemilik) — dicatat sebagai keterbatasan; perbaikan lanjutan: pakai `x-user-id` sebagai identitas peminjam (lihat `architecture.md`).
-* `test.http` dipertahankan sebagai arsip, sumber kebenaran pengujian adalah Postman.
+* Race condition 2 peminjam bersamaan (check-then-act tanpa lock) — di luar scope, cukup didokumentasikan (sudah ada di `docs/ARCHITECTURE.md`).
+* `studentId` pada `POST` dan `GET /api/loans` belum dicocokkan dengan JWT (`POST` hanya memvalidasi user ada; `GET` tanpa filter mengembalikan semua loan; `POST /api/loans/:id/return` tidak cek pemilik) — dicatat sebagai keterbatasan; perbaikan lanjutan: pakai `x-user-id` sebagai identitas peminjam (lihat `docs/ARCHITECTURE.md` dan `docs/API_CONTRACT.md` §4).
+* `test.http` sudah tidak ada; sumber kebenaran pengujian adalah Postman (`api-test/postman/`).
