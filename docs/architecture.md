@@ -110,6 +110,15 @@ Aturan yang ditegakkan gateway (`api-gateway/routes/proxy.js` + `middleware/veri
 Keterbatasan yang diketahui: race condition dua peminjam bersamaan untuk buku yang sama
 (check-then-act tanpa lock) — di luar scope, cukup didokumentasikan.
 
+Keterbatasan yang diketahui: identitas peminjam belum dicocokkan dengan JWT.
+`studentId` pada `POST /api/loans` (body) dan `GET /api/loans` (query) dipakai apa adanya
+oleh `loan-service`, sedangkan `x-user-id` yang di-inject gateway dari JWT belum dibaca.
+Akibatnya user ber-JWT valid bisa meminjam/melihat loan atas nama `studentId` lain,
+`GET /api/loans` tanpa `studentId` mengembalikan semua loan, dan
+`POST /api/loans/:id/return` tidak mengecek pemilik loan.
+Perbaikan lanjutan: pakai `x-user-id` sebagai identitas peminjam (abaikan/tolak `studentId`
+yang berbeda, filter `GET` dan cek kepemilikan saat return berdasarkan `x-user-id`).
+
 ### DB-per-service
 
 Satu server MySQL lokal (`localhost:3306, root, password kosong`), tiap service hanya

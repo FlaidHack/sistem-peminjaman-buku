@@ -1,12 +1,5 @@
 # PRD — Perbaikan Microservice Sistem Peminjaman Buku
 
-| Field | Isi |
-|---|---|
-| Versi | 1.1 (2026-10-08) |
-| Status | Final revisi logout stateful |
-| Repo | `vbecod` (kelompok 1) |
-| Stack | Node.js + Express, MySQL lokal (XAMPP/Laragon), frontend statis, Postman |
-
 ## 1. Latar belakang & tujuan
 
 Kondisi saat ini: `catalog-service/:3001` merangkap login + katalog (JSON), `loan-service/:3002` (JSON), frontend hit langsung ke 2 service, 1 internal key hardcoded, tanpa gateway, tanpa DB, test hanya `test.http`.
@@ -66,7 +59,7 @@ Gateway cek `jti` via `GET :3003/api/internal/sessions/check?jti=` (header `x-ap
 
 ### 4.1 Auth
 * `POST /api/auth/login {nim, password}` → `200 {success, user:{id,name}, token}` (JWT berisi `sub=nim, name, jti=UUID, exp 2 jam`) / `400` body kosong / `401` salah.
-* `POST /api/auth/logout` → butuh Bearer valid → `200 {success:true}` + revoke `jti` via `INSERT IGNORE INTO revoked_tokens`. **Stateful: token lama langsung ditolak `401`** di `GET /api/auth/me` dan semua endpoint proteksi via gateway. Idempotent: logout 2x dengan token sama tetap `200`. Frontend tetap `clearSession()` best-effort walau request gagal.
+* `POST /api/auth/logout` → butuh Bearer valid → `200 {success:true}` + revoke `jti` via `INSERT IGNORE INTO revoked_tokens`. **Stateful: token lama langsung ditolak `401`** di `GET /api/auth/me` dan semua endpoint proteksi via gateway. Logout kedua kali dengan token yang sama → `401` (`jti` sudah di-revoke, ditolak gateway dan auth-service). Frontend tetap `clearSession()` best-effort walau request gagal.
 * `GET /api/auth/me` → butuh Bearer belum di-revoke → `200 {user}` / `401` (tanpa token, token expired, sudah logout, atau tanpa `jti`).
 * `GET /api/users/:id` → internal (gateway teruskan + loan-service panggil langsung dengan `AUTH_API_KEY`) → `200 {user:{id,name}}` / `404`.
 * `GET /api/internal/sessions/check?jti=` → internal gateway→auth-service (header `x-api-key`) → `200 {revoked:true/false}`. Dipakai `verifyJwt` tiap request proteksi.
@@ -365,4 +358,5 @@ Urutan merge: A → B/C → D → E.
 * Logout stateful: `revoked_tokens` tumbuh — butuh cleanup periodik by `expires_at`; gateway fail-closed ke auth (`503` saat auth mati) — diterima sebagai tradeoff keamanan.
 * Secret/key beda antar laptop → wajib 1 set seragam dari ketua.
 * Race condition 2 peminjam bersamaan (check-then-act tanpa lock) — di luar scope, cukup didokumentasikan (sudah ada di `architecture.md`).
+* `studentId` pada `POST` dan `GET /api/loans` belum dicocokkan dengan `x-user-id` dari JWT (juga berlaku untuk `GET /api/loans` tanpa filter dan `POST /api/loans/:id/return` tanpa cek pemilik) — dicatat sebagai keterbatasan; perbaikan lanjutan: pakai `x-user-id` sebagai identitas peminjam (lihat `architecture.md`).
 * `test.http` dipertahankan sebagai arsip, sumber kebenaran pengujian adalah Postman.

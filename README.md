@@ -147,4 +147,4 @@ Setiap request sudah punya **Tests** (assert status + body); request Login menyi
    - Nyalakan lagi `catalog-service`, ulangi pinjam → `201` normal.
 6. Runner Postman dari atas ke bawah hijau semua.
 
-> Acuan arsitektur: [docs/architecture.md](docs/architecture.md). Sumber kebenaran pengujian: collection Postman di `postman/`.
+> Acuan arsitektur: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Sumber kebenaran pengujian: collection Postman di `postman/`.
